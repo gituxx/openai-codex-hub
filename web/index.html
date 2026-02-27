@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>OpenAI Codex Hub</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh;font-size:14px}
+.header{background:#1a1d2e;border-bottom:1px solid #2d3148;padding:14px 20px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
+.header h1{font-size:16px;font-weight:600}
+.badge{background:#10b981;color:#fff;font-size:11px;padding:2px 8px;border-radius:99px}
+.nav{display:flex;gap:4px;margin-left:auto}
+.nav-btn{padding:6px 12px;border-radius:6px;border:none;cursor:pointer;font-size:13px;background:transparent;color:#94a3b8;transition:all .2s}
+.nav-btn.active{background:#2d3148;color:#e2e8f0}
+.nav-btn:hover{color:#e2e8f0}
+.container{max-width:1000px;margin:0 auto;padding:20px 16px}
+.page{display:none}.page.active{display:block}
+/* Cards */
+.card{background:#1a1d2e;border:1px solid #2d3148;border-radius:12px;padding:20px;margin-bottom:16px}
+.card-title{font-size:13px;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px}
+/* Stats grid */
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px}
+@media(min-width:600px){.stats-grid{grid-template-columns:repeat(4,1fr)}}
+.stat-card{background:#1a1d2e;border:1px solid #2d3148;border-radius:10px;padding:16px}
+.stat-val{font-size:28px;font-weight:700;color:#10b981}
+.stat-label{font-size:12px;color:#64748b;margin-top:4px}
+/* Table */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;min-width:520px}
+th{text-align:left;font-size:12px;color:#64748b;padding:8px 10px;border-bottom:1px solid #2d3148;white-space:nowrap}
+td{padding:10px;border-bottom:1px solid #1e2235;font-size:13px;vertical-align:top}
+tr:last-child td{border-bottom:none}
+.status-active{color:#10b981}
+.status-error{color:#ef4444}
+.status-expired{color:#f59e0b}
+/* Buttons */
+.btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:14px;font-weight:500;transition:opacity .2s;white-space:nowrap}
+.btn:hover{opacity:.85}
+.btn-primary{background:#6366f1;color:#fff}
+.btn-success{background:#10b981;color:#fff}
+.btn-danger{background:#ef4444;color:#fff;padding:5px 10px;font-size:12px}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-ghost{background:#2d3148;color:#e2e8f0}
+/* Form */
+.input{width:100%;background:#0f1117;border:1px solid #2d3148;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:14px;outline:none}
+.input:focus{border-color:#6366f1}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;font-size:13px;color:#94a3b8;margin-bottom:6px}
+/* Tabs */
+.tabs{display:flex;gap:4px;margin-bottom:16px;background:#0f1117;padding:4px;border-radius:8px}
+.tab{flex:1;padding:8px;text-align:center;cursor:pointer;border-radius:6px;font-size:13px;color:#64748b;transition:all .2s}
+.tab.active{background:#1a1d2e;color:#e2e8f0}
+/* Modal */
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;align-items:center;justify-content:center;padding:16px}
+.modal.open{display:flex}
+.modal-box{background:#1a1d2e;border:1px solid #2d3148;border-radius:12px;width:100%;max-width:480px;padding:24px;max-height:90vh;overflow-y:auto}
+/* Alert */
+.alert{padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:13px}
+.alert-success{background:#064e3b;color:#6ee7b7}
+.alert-error{background:#450a0a;color:#fca5a5}
+/* Code */
+.code-box{background:#0f1117;border:1px solid #2d3148;border-radius:6px;padding:10px 12px;font-family:monospace;font-size:12px;color:#10b981;word-break:break-all}
+.two-col{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:600px){.two-col{grid-template-columns:1fr 1fr}}
+.empty{text-align:center;padding:40px;color:#64748b}
+.badge-ok{background:#064e3b;color:#6ee7b7;padding:2px 8px;border-radius:4px;font-size:11px}
+.badge-err{background:#450a0a;color:#fca5a5;padding:2px 8px;border-radius:4px;font-size:11px}
+.row-actions{display:flex;gap:6px;flex-wrap:wrap}
+.divider{border:none;border-top:1px solid #2d3148;margin:16px 0}
+.top-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.pagination{display:flex;align-items:center;gap:8px;margin-top:12px;justify-content:center}
+</style>
+</head>
+<body>
+<div class="header">
+  <div style="font-size:20px">🦞</div>
+  <h1>Codex Hub</h1>
+  <span class="badge" id="health-badge">...</span>
+  <nav class="nav">
+    <button class="nav-btn active" onclick="showPage('accounts')">账号</button>
+    <button class="nav-btn" onclick="showPage('stats')">统计</button>
+    <button class="nav-btn" onclick="showPage('logs')">日志</button>
+    <button class="nav-btn" onclick="showPage('settings')">设置</button>
+  </nav>
+</div>
+
+<div class="container">
+
+<!-- 账号页 -->
+<div class="page active" id="page-accounts">
+  <div class="card">
+    <div class="top-bar">
+      <div class="card-title" style="margin:0">账号管理</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="exportAccounts()">⬇ 导出</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('import-file').click()">⬆ 导入</button>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importAccounts(this)">
+        <button class="btn btn-success" onclick="openModal()">+ 添加账号</button>
+      </div>
+    </div>
+    <div class="tbl-wrap" id="accounts-table"><div class="empty">加载中...</div></div>
+  </div>
+  <!-- API 接入信息 -->
+  <div class="card">
+    <div class="card-title">API 接入配置</div>
+    <div class="two-col">
+      <div>
+        <div class="form-group">
+          <label>Base URL</label>
+          <div class="code-box" id="base-url-display">http://192.168.31.201:8047/v1</div>
+        </div>
+      </div>
+      <div>
+        <div class="form-group">
+          <label>API Key</label>
+          <div style="display:flex;gap:8px">
+            <div class="code-box" style="flex:1" id="api-key-display">加载中...</div>
+            <button class="btn btn-ghost btn-sm" onclick="copyText(document.getElementById('api-key-display').textContent)">复制</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#64748b">支持协议：<code>/v1/chat/completions</code> · <code>/v1/responses</code> · <code>/v1/models</code></div>
+  </div>
+</div>
+
+<!-- 统计页 -->
+<div class="page" id="page-stats">
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-val" id="s-total">-</div><div class="stat-label">总请求数</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-today">-</div><div class="stat-label">今日请求</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-in">-</div><div class="stat-label">输入 Tokens</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-out">-</div><div class="stat-label">输出 Tokens</div></div>
+  </div>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">成功 / 失败</div>
+      <div style="display:flex;gap:24px;align-items:center;padding:8px 0">
+        <div><div style="font-size:32px;font-weight:700;color:#10b981" id="s-ok">-</div><div style="font-size:12px;color:#64748b">成功</div></div>
+        <div><div style="font-size:32px;font-weight:700;color:#ef4444" id="s-err">-</div><div style="font-size:12px;color:#64748b">失败</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">模型使用排行</div>
+      <div id="s-models" style="font-size:13px"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">各账号 Token 统计</div>
+    <div class="tbl-wrap" id="acct-tokens"></div>
+  </div>
+</div>
+
+<!-- 日志页 -->
+<div class="page" id="page-logs">
+  <div class="card">
+    <div class="top-bar">
+      <div class="card-title" style="margin:0">请求日志</div>
+      <button class="btn btn-ghost btn-sm" onclick="loadLogs(0)">刷新</button>
+    </div>
+    <div class="tbl-wrap" id="logs-table"><div class="empty">加载中...</div></div>
+    <div class="pagination" id="logs-pagination"></div>
+  </div>
+</div>
+
+<!-- 设置页 -->
+<div class="page" id="page-settings">
+  <div class="card">
+    <div class="card-title">系统设置</div>
+    <div class="two-col">
+      <div class="form-group">
+        <label>API Key（客户端调用时使用）</label>
+        <input class="input" id="setting-api-key" placeholder="sk-codex-hub-...">
+      </div>
+      <div class="form-group">
+        <label>每账号每小时限速（次）</label>
+        <input class="input" id="setting-rate" type="number" placeholder="50">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<!-- 添加账号弹窗 -->
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <h3 style="font-size:16px">添加账号</h3>
+      <button onclick="closeModal()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:20px">✕</button>
+    </div>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('oauth')">🔗 OAuth 登录</div>
+      <div class="tab" onclick="switchTab('manual')">📋 手动导入</div>
+    </div>
+
+    <!-- OAuth -->
+    <div id="tab-oauth">
+      <p style="font-size:13px;color:#94a3b8;margin-bottom:14px">点击按钮，在浏览器完成 ChatGPT 登录。登录后将回调地址粘贴到下方。</p>
+      <div id="oauth-alert"></div>
+      <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="startOAuth()">🚀 打开登录页面</button>
+      <hr class="divider">
+      <div class="form-group">
+        <label>粘贴回调地址（http://localhost:1455/auth/callback?code=...）</label>
+        <input class="input" id="callback-url" placeholder="http://localhost:1455/auth/callback?code=...&state=...">
+      </div>
+      <button class="btn btn-success" style="width:100%" onclick="submitCallback()">提交</button>
+    </div>
+
+    <!-- 手动 -->
+    <div id="tab-manual" style="display:none">
+      <p style="font-size:13px;color:#94a3b8;margin-bottom:14px">从 ~/.openclaw/agents/main/agent/auth.json 复制 openai-codex 的 access / refresh / expires 字段。</p>
+      <div id="manual-alert"></div>
+      <div class="form-group"><label>access_token</label><textarea class="input" id="m-access" rows="3" placeholder="eyJ..."></textarea></div>
+      <div class="form-group"><label>refresh_token</label><textarea class="input" id="m-refresh" rows="2" placeholder="rt_..."></textarea></div>
+      <div class="form-group"><label>expires（毫秒时间戳，OpenClaw 格式）</label><input class="input" id="m-expires" type="number" placeholder="1773069922617"></div>
+      <button class="btn btn-success" style="width:100%" onclick="submitManual()">导入</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let logPage = 0;
+const PAGE_SIZE = 50;
+
+// ── 导航 ──
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (name === 'stats') loadStats();
+  if (name === 'logs') loadLogs(0);
+  if (name === 'settings') loadSettings();
+}
+
+// ── API ──
+async function api(path, opts={}) {
+  const r = await fetch(path, opts);
+  return r.json().catch(() => ({}));
+}
+
+// ── 初始化 ──
+async function init() {
+  await Promise.all([loadHealth(), loadAccounts(), loadApiKey()]);
+  setInterval(() => { loadHealth(); loadAccounts(); }, 15000);
+}
+
+async function loadHealth() {
+  try {
+    const h = await api('/health');
+    const el = document.getElementById('health-badge');
+    el.textContent = `运行中 ${h.active_accounts || 0} 账号`;
+    el.style.background = '#10b981';
+  } catch {
+    document.getElementById('health-badge').textContent = '离线';
+    document.getElementById('health-badge').style.background = '#ef4444';
+  }
+}
+
+async function loadApiKey() {
+  const s = await api('/api/settings');
+  document.getElementById('api-key-display').textContent = s.api_key || '';
+}
+
+async function loadAccounts() {
+  const accounts = await api('/api/accounts');
+  renderAccounts(accounts);
+}
+
+function renderAccounts(accounts) {
+  const el = document.getElementById('accounts-table');
+  if (!accounts.length) { el.innerHTML = '<div class="empty">暂无账号，点击右上角「添加账号」</div>'; return; }
+  const rows = accounts.map(a => {
+    const sc = `status-${a.status}`;
+    const st = {active:'✅ 正常', error:'❌ 错误', expired:'⚠️ 过期'}[a.status] || a.status;
+    const exp = a.expires ? new Date(a.expires*1000).toLocaleDateString('zh-CN') : '-';
+    const err = a.last_error ? `<div style="font-size:11px;color:#ef4444;margin-top:2px">${a.last_error.slice(0,50)}</div>` : '';
+    const resetBtn = a.status !== 'active' ? `<button class="btn btn-ghost btn-sm" onclick="resetAccount(${a.id})">重置</button>` : '';
+    return `<tr>
+      <td>${a.email||'-'}${err}</td>
+      <td class="${sc}">${st}</td>
+      <td style="color:#64748b;font-size:12px">${exp}</td>
+      <td>${a.use_count||0}</td>
+      <td>${fmtTokens(a.input_tokens)} / ${fmtTokens(a.output_tokens)}</td>
+      <td><div class="row-actions">${resetBtn}<button class="btn btn-danger" onclick="deleteAccount(${a.id})">删除</button></div></td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table><thead><tr><th>账号</th><th>状态</th><th>Token 到期</th><th>调用次数</th><th>输入/输出 Tokens</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function deleteAccount(id) {
+  if (!confirm('确认删除？')) return;
+  await api(`/api/accounts/${id}`, {method:'DELETE'});
+  loadAccounts();
+}
+async function resetAccount(id) {
+  await api(`/api/accounts/${id}/reset`, {method:'POST'});
+  loadAccounts();
+}
+
+// ── 导出 ──
+async function exportAccounts() {
+  const data = await api('/api/accounts/export', {method:'POST'});
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `codex-hub-accounts-${Date.now()}.json`;
+  a.click();
+}
+
+// ── 导入 ──
+async function importAccounts(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const text = await file.text();
+  let data;
+  try { data = JSON.parse(text); } catch { alert('JSON 格式错误'); return; }
+  // 兼容数组或对象
+  const accounts = Array.isArray(data) ? data : [data];
+  const res = await api('/api/accounts/import-batch', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({accounts})
+  });
+  alert(`成功导入 ${res.imported} 个账号`);
+  loadAccounts();
+  input.value = '';
+}
+
+// ── 统计 ──
+async function loadStats() {
+  const s = await api('/api/stats');
+  document.getElementById('s-total').textContent = s.total_requests || 0;
+  document.getElementById('s-today').textContent = s.today_requests || 0;
+  document.getElementById('s-in').textContent = fmtTokens(s.total_input_tokens);
+  document.getElementById('s-out').textContent = fmtTokens(s.total_output_tokens);
+  document.getElementById('s-ok').textContent = s.ok_requests || 0;
+  document.getElementById('s-err').textContent = s.error_requests || 0;
+  const models = (s.top_models||[]).map(m => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #2d3148"><span style="color:#94a3b8">${m.model}</span><span>${m.count}</span></div>`).join('')||'<div style="color:#64748b">暂无数据</div>';
+  document.getElementById('s-models').innerHTML = models;
+  // 账号 token 统计
+  const accounts = await api('/api/accounts');
+  const rows = accounts.map(a => `<tr><td>${a.email||'-'}</td><td>${fmtTokens(a.input_tokens)}</td><td>${fmtTokens(a.output_tokens)}</td><td>${a.use_count||0}</td></tr>`).join('');
+  document.getElementById('acct-tokens').innerHTML = `<table><thead><tr><th>账号</th><th>输入 Tokens</th><th>输出 Tokens</th><th>调用次数</th></tr></thead><tbody>${rows||'<tr><td colspan=4 style="text-align:center;color:#64748b">暂无数据</td></tr>'}</tbody></table>`;
+}
+
+// ── 日志 ──
+async function loadLogs(offset) {
+  logPage = offset;
+  const data = await api(`/api/logs?limit=${PAGE_SIZE}&offset=${offset}`);
+  const logs = data.logs || [];
+  const total = data.total || 0;
+  const el = document.getElementById('logs-table');
+  if (!logs.length) { el.innerHTML = '<div class="empty">暂无日志</div>'; document.getElementById('logs-pagination').innerHTML=''; return; }
+  const rows = logs.map(l => {
+    const t = new Date(l.created_at*1000).toLocaleString('zh-CN');
+    const badge = l.status==='ok' ? '<span class="badge-ok">成功</span>' : '<span class="badge-err">失败</span>';
+    const err = l.error_msg ? `<div style="font-size:11px;color:#ef4444">${l.error_msg.slice(0,60)}</div>` : '';
+    return `<tr><td style="font-size:11px;color:#64748b;white-space:nowrap">${t}</td><td>${l.account_email||'-'}</td><td style="font-family:monospace;font-size:12px">${l.model||'-'}</td><td>${badge}${err}</td><td style="text-align:right">${l.input_tokens||0}</td><td style="text-align:right">${l.output_tokens||0}</td><td style="text-align:right">${l.latency_ms||0}ms</td></tr>`;
+  }).join('');
+  el.innerHTML = `<table><thead><tr><th>时间</th><th>账号</th><th>模型</th><th>状态</th><th>输入</th><th>输出</th><th>耗时</th></tr></thead><tbody>${rows}</tbody></table>`;
+  // 翻页
+  const pages = Math.ceil(total / PAGE_SIZE);
+  const cur = Math.floor(offset / PAGE_SIZE);
+  let pg = '';
+  if (pages > 1) {
+    pg += `<button class="btn btn-ghost btn-sm" ${cur===0?'disabled':''} onclick="loadLogs(${(cur-1)*PAGE_SIZE})">‹ 上一页</button>`;
+    pg += `<span style="color:#64748b;font-size:13px">${cur+1} / ${pages}</span>`;
+    pg += `<button class="btn btn-ghost btn-sm" ${cur>=pages-1?'disabled':''} onclick="loadLogs(${(cur+1)*PAGE_SIZE})">下一页 ›</button>`;
+  }
+  document.getElementById('logs-pagination').innerHTML = pg;
+}
+
+// ── 设置 ──
+async function loadSettings() {
+  const s = await api('/api/settings');
+  document.getElementById('setting-api-key').value = s.api_key || '';
+  document.getElementById('setting-rate').value = s.rate_limit_per_hour || '50';
+}
+async function saveSettings() {
+  const api_key = document.getElementById('setting-api-key').value.trim();
+  const rate = document.getElementById('setting-rate').value;
+  await api('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({api_key, rate_limit_per_hour:rate})});
+  await loadApiKey();
+  alert('✅ 设置已保存');
+}
+
+// ── Modal ──
+function openModal() { document.getElementById('modal').classList.add('open'); }
+function closeModal() { document.getElementById('modal').classList.remove('open'); loadAccounts(); }
+
+function switchTab(t) {
+  document.querySelectorAll('.tabs .tab').forEach((el,i) => el.classList.toggle('active', ['oauth','manual'][i]===t));
+  document.getElementById('tab-oauth').style.display = t==='oauth'?'block':'none';
+  document.getElementById('tab-manual').style.display = t==='manual'?'block':'none';
+}
+
+async function startOAuth() {
+  const data = await api('/api/accounts/oauth', {method:'POST'});
+  window.open(data.auth_url, '_blank');
+  setAlert('oauth-alert','success','已打开登录页面，完成后将回调地址粘贴到下方');
+}
+
+async function submitCallback() {
+  const url = document.getElementById('callback-url').value.trim();
+  if (!url) return setAlert('oauth-alert','error','请填写回调地址');
+  try {
+    const u = new URL(url);
+    const code = u.searchParams.get('code'), state = u.searchParams.get('state');
+    if (!code||!state) return setAlert('oauth-alert','error','回调地址缺少 code 或 state');
+    const r = await fetch(`/auth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`);
+    if (r.ok) { setAlert('oauth-alert','success','✅ 添加成功'); setTimeout(closeModal, 1500); }
+    else setAlert('oauth-alert','error','添加失败，请重试');
+  } catch(e) { setAlert('oauth-alert','error','错误：'+e.message); }
+}
+
+async function submitManual() {
+  const access = document.getElementById('m-access').value.trim();
+  const refresh = document.getElementById('m-refresh').value.trim();
+  const expiresRaw = parseInt(document.getElementById('m-expires').value);
+  if (!access||!refresh||!expiresRaw) return setAlert('manual-alert','error','请填写所有字段');
+  // 兼容毫秒和秒
+  const expires = expiresRaw > 9999999999 ? Math.floor(expiresRaw/1000) : expiresRaw;
+  try {
+    const data = await api('/api/accounts/import', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({access, refresh, expires})});
+    if (data.email) { setAlert('manual-alert','success','✅ 导入成功：'+data.email); setTimeout(closeModal, 1500); }
+    else setAlert('manual-alert','error', JSON.stringify(data));
+  } catch(e) { setAlert('manual-alert','error','错误：'+e.message); }
+}
+
+// ── 工具 ──
+function setAlert(id, type, msg) {
+  document.getElementById(id).innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+}
+function copyText(t) { navigator.clipboard.writeText(t).then(()=>alert('已复制')); }
+function fmtTokens(n) {
+  n = n||0;
+  if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1)+'K';
+  return String(n);
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  codex-hub:
+    build: .
+    ports:
+      - "8047:8047"
+      - "1455:1455"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
