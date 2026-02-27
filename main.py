@@ -68,8 +68,9 @@ async def api_import(body: dict):
         raise HTTPException(400, str(e))
 
 @app.post("/api/accounts/export")
-async def api_export():
-    return db.export_accounts()
+async def api_export(body: dict = {}):
+    ids = body.get("ids")  # 传 ids 列表则只导出选中的，否则全部
+    return db.export_accounts(ids if ids else None)
 
 @app.post("/api/accounts/import-batch")
 async def api_import_batch(body: dict):
@@ -86,6 +87,20 @@ async def api_delete(account_id: int):
 async def api_reset(account_id: int):
     db.reset_account_status(account_id)
     return {"ok": True}
+
+@app.post("/api/accounts/{account_id}/disable")
+async def api_disable(account_id: int):
+    db.set_account_disabled(account_id, True)
+    return {"ok": True}
+
+@app.post("/api/accounts/{account_id}/enable")
+async def api_enable(account_id: int):
+    db.set_account_disabled(account_id, False)
+    return {"ok": True}
+
+@app.get("/api/accounts/{account_id}/model-stats")
+async def api_model_stats(account_id: int):
+    return db.get_account_model_stats(account_id)
 
 # ── 统计 & 日志 API ──
 @app.get("/api/stats")
