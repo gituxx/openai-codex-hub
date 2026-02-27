@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 import db
+from models import get_all_models, detect_new_models, test_model, scan_openclaw_models
 from auth.oauth import generate_auth_url, exchange_code, manual_import
 from proxy.routes import router as proxy_router
 
@@ -122,6 +123,40 @@ async def api_set_settings(body: dict):
     for k, v in body.items():
         db.set_setting(k, str(v))
     return {"ok": True}
+
+# ── 模型 API ──
+@app.get("/api/models")
+async def api_models():
+    return get_all_models()
+
+@app.get("/api/models/scan")
+async def api_scan():
+    new = detect_new_models()
+    all_scanned = scan_openclaw_models()
+    return {"scanned": all_scanned, "new": new}
+
+@app.post("/api/models/test")
+async def api_test_model(body: dict):
+    model_id = body.get("model")
+    if not model_id:
+        raise HTTPException(400, "missing model")
+    accounts = db.get_active_accounts()
+    if not accounts:
+        raise HTTPException(503, "No active accounts")
+    result = await test_model(model_id, accounts[0]["access"])
+    return result
+
+@app.post("/api/models/test-all")
+async def api_test_all():
+    accounts = db.get_active_accounts()
+    if not accounts:
+        raise HTTPException(503, "No active accounts")
+    models = get_all_models()
+    results = []
+    for m in models:
+        r = await test_model(m["id"], accounts[0]["access"])
+        results.append(r)
+    return results
 
 @app.get("/health")
 async def health():

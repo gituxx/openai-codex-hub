@@ -76,6 +76,7 @@ tr:last-child td{border-bottom:none}
 <button class="nav-btn active" onclick="showPage('accounts',this)">账号</button>
 <button class="nav-btn" onclick="showPage('stats',this)">统计</button>
 <button class="nav-btn" onclick="showPage('logs',this)">日志</button>
+<button class="nav-btn" onclick="showPage('models',this)">模型</button>
 <button class="nav-btn" onclick="showPage('settings',this)">设置</button>
 </nav>
 </div>
@@ -127,6 +128,20 @@ tr:last-child td{border-bottom:none}
 </div>
 </div>
 
+<div class="page" id="page-models">
+<div class="card">
+<div class="top-bar">
+<div class="card-title" style="margin:0">Codex 可用模型</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<button class="btn btn-ghost btn-sm" onclick="scanModels()">🔍 扫描新模型</button>
+<button class="btn btn-primary btn-sm" onclick="testAllModels()">⚡ 全部测试</button>
+</div>
+</div>
+<div id="scan-alert"></div>
+<div class="tbl-wrap" id="models-table"><div class="empty">加载中...</div></div>
+</div>
+</div>
+
 <div class="page" id="page-settings">
 <div class="card">
 <div class="card-title">系统设置</div>
@@ -159,7 +174,7 @@ tr:last-child td{border-bottom:none}
 
 <script>
 const PS=50;let logPage=0;
-function showPage(n,el){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.getElementById('page-'+n).classList.add('active');if(el)el.classList.add('active');if(n==='stats')loadStats();if(n==='logs')loadLogs(0);if(n==='settings')loadSettings();}
+function showPage(n,el){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.getElementById('page-'+n).classList.add('active');if(el)el.classList.add('active');if(n==='models')loadModels();if(n==='stats')loadStats();if(n==='logs')loadLogs(0);if(n==='settings')loadSettings();}
 async function api(p,o={}){const r=await fetch(p,o);return r.json().catch(()=>({}));}
 async function init(){await Promise.all([loadHealth(),loadAccounts(),loadApiKey()]);setInterval(()=>{loadHealth();loadAccounts();},15000);}
 async function loadHealth(){try{const h=await api('/health');const e=document.getElementById('health-badge');e.textContent='运行中 '+(h.active_accounts||0)+' 账号';e.style.background='#10b981';}catch{document.getElementById('health-badge').textContent='离线';}}
@@ -204,6 +219,16 @@ async function submitManual(){const a=document.getElementById('m-access').value.
 function setA(id,t,m){document.getElementById(id).innerHTML='<div class="alert alert-'+t+'">'+m+'</div>';}
 function copyText(t){navigator.clipboard.writeText(t).then(()=>alert('已复制'));}
 function fmtT(n){n=n||0;if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return String(n);}
+
+async function loadModels(){const models=await api('/api/models');renderModels(models,[]);}
+function renderModels(models,results){const el=document.getElementById('models-table');const rmap={};results.forEach(r=>rmap[r.model]=r);
+const rows=models.map(m=>{const r=rmap[m.id];const tier={'latest':'🟢','standard':'🔵','max':'🟣','mini':'⚪','experimental':'🟡'}[m.tier]||'⚫';let st='<span style="color:#64748b">未测试</span>';let lat='';if(r){if(r.status==='ok'){st='<span class="badge-ok">可用</span>';lat=r.latency_ms+'ms';}else{st='<span class="badge-err">不可用</span>';lat='<span style="font-size:11px;color:#ef4444">'+(r.error||'').slice(0,50)+'</span>';}}
+return '<tr><td>'+tier+'</td><td style="font-family:monospace;font-size:13px">'+m.id+'</td><td>'+m.name+'</td><td>'+st+'</td><td>'+lat+'</td><td><button class="btn btn-ghost btn-sm" onclick="testOne(\x27'+m.id+'\x27)">测试</button></td></tr>';}).join('');
+el.innerHTML='<table><thead><tr><th></th><th>模型 ID</th><th>名称</th><th>状态</th><th>延迟</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';}
+async function scanModels(){document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">扫描中...</div>';const d=await api('/api/models/scan');if(d.new&&d.new.length>0){document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">发现 '+d.new.length+' 个新模型: '+d.new.join(', ')+'</div>';}else{document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">未发现新模型，共 '+d.scanned.length+' 个</div>';}loadModels();}
+async function testOne(mid){const r=await api('/api/models/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:mid})});const models=await api('/api/models');renderModels(models,[r]);}
+async function testAllModels(){document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">正在测试所有模型...</div>';const results=await api('/api/models/test-all',{method:'POST'});const models=await api('/api/models');const ok=results.filter(r=>r.status==='ok').length;document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">测试完成: '+ok+'/'+results.length+' 个可用</div>';renderModels(models,results);}
+
 init();
 </script>
 </body>
