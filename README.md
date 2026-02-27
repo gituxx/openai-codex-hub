@@ -24,17 +24,44 @@ OpenAI Codex Hub is a self-hosted proxy server that manages multiple ChatGPT OAu
 - 📱 **Mobile-friendly** — Responsive UI works on phone and desktop
 - 🐳 **Docker-ready** — Single `docker-compose up` deployment
 
-### Supported Models
+### Supported Models (Verified ✅)
 
-| Model | Notes |
-|-------|-------|
-| `gpt-5.1` | Base reasoning |
-| `gpt-5.1-codex-max` | Max context |
-| `gpt-5.1-codex-mini` | Fast / lightweight |
-| `gpt-5.2` | Balanced |
-| `gpt-5.2-codex` | Coding-optimized |
-| `gpt-5.3-codex` | Latest stable |
-| `gpt-5.3-codex-spark` | Experimental |
+| Model | Tier | Notes |
+|-------|------|-------|
+| `gpt-5-codex` | 🔵 Standard | GPT-5 base Codex |
+| `gpt-5.1-codex` | 🔵 Standard | GPT-5.1 standard |
+| `gpt-5.1-codex-max` | 🟣 Max | Largest context window |
+| `gpt-5.1-codex-mini` | ⚪ Mini | Fast / lightweight |
+| `gpt-5.2-codex` | 🔵 Standard | Coding-optimized |
+| `gpt-5.3-codex` | 🟢 Latest | Latest stable, recommended ⭐ |
+
+> All models are live-tested against ChatGPT Codex API. Use the **Models** tab in the web UI to scan for new models and run live tests.
+
+### Tracking New Models
+
+OpenAI occasionally adds new Codex models. Three ways to stay current:
+
+**Method 1 — Web UI (Easiest)**
+
+Open the Hub dashboard → **Models** tab → click **🔍 Scan New Models**. The hub auto-scans the local OpenClaw installation for any newly added Codex model IDs. Click **⚡ Test All** to verify availability in one click.
+
+**Method 2 — CLI one-liner**
+
+After updating OpenClaw (`npm update -g openclaw`), run:
+
+```bash
+grep -o '"gpt-[^"]*codex[^"]*"\|"codex-[^"]*"' \
+  /opt/homebrew/lib/node_modules/openclaw/node_modules/@mariozechner/pi-ai/dist/models.generated.d.ts \
+  | sort -u
+```
+
+This lists all Codex model IDs registered in OpenClaw's upstream provider.
+
+**Method 3 — Watch upstream sources**
+
+- [OpenClaw Releases](https://github.com/openclaw/openclaw/releases) — model list updates ship with new versions
+- [@mariozechner/pi-ai](https://www.npmjs.com/package/@mariozechner/pi-ai) on npm — the actual provider package
+- [OpenAI announcements](https://openai.com/blog) — official model launches
 
 ---
 
@@ -134,13 +161,14 @@ openai-codex-hub/
 ├── run.py           # Multi-port launcher (8047 + 1455)
 ├── db.py            # SQLite: accounts, logs, settings
 ├── scheduler.py     # Round-robin account scheduler
+├── models.py        # Model discovery, testing, blacklist
 ├── auth/
 │   ├── oauth.py     # ChatGPT OAuth flow (PKCE)
 │   └── refresh.py   # Token refresh
 ├── proxy/
 │   └── routes.py    # Protocol proxy (/v1/chat/completions → Codex)
 ├── web/
-│   └── index.html   # Management UI
+│   └── index.html   # Management UI (responsive)
 ├── requirements.txt
 ├── docker-compose.yml
 └── Dockerfile
@@ -189,10 +217,52 @@ OpenAI Codex Hub 是一个自托管的代理服务器，管理多个 ChatGPT OAu
 - ♻️ **Token 自动刷新** — access token 过期后静默刷新
 - 📊 **请求日志** — 每次请求的延迟、Token 数、状态全部记录
 - 📈 **Token 统计** — 按账号统计输入/输出 Token 用量
-- 📤 **导入/导出** — JSON 批量导入导出账号
+- 📤 **导入/导出** — JSON 批量导入导出账号（支持选择导出）
 - 🌐 **双协议** — 同时支持 `/v1/chat/completions` 和 `/v1/responses`
 - 📱 **手机适配** — 响应式界面，手机/电脑均可正常使用
 - 🐳 **Docker 部署** — 一条命令启动
+- 🔍 **模型自动发现** — 自动扫描 OpenClaw 源码，发现新 Codex 模型
+- ⚡ **在线测试** — 一键测试所有模型可用性和延迟
+- 🔒 **账号禁用/启用** — 临时停用账号不删除
+
+### 已验证可用模型
+
+| 模型 | 级别 | 说明 |
+|------|------|------|
+| `gpt-5-codex` | 🔵 标准 | GPT-5 基础 Codex |
+| `gpt-5.1-codex` | 🔵 标准 | GPT-5.1 标准版 |
+| `gpt-5.1-codex-max` | 🟣 最大 | 最大上下文窗口 |
+| `gpt-5.1-codex-mini` | ⚪ 轻量 | 快速轻量 |
+| `gpt-5.2-codex` | 🔵 标准 | 编码优化 |
+| `gpt-5.3-codex` | 🟢 最新 | 最新稳定版，推荐 ⭐ |
+
+> 所有模型均经过实际 API 测试验证。在管理后台「模型」标签页可随时扫描和测试。
+
+### 追踪最新模型
+
+OpenAI 会不定期新增 Codex 模型，三种方式保持同步：
+
+**方法一 — 管理后台（最简单）**
+
+打开 Hub 管理后台 → 点「模型」标签页 → 点 **🔍 扫描新模型**。Hub 会自动扫描本地 OpenClaw 安装目录，发现新增的 Codex 模型 ID。点 **⚡ 全部测试** 一键验证可用性。
+
+**方法二 — 命令行一行搞定**
+
+更新 OpenClaw（`npm update -g openclaw`）后执行：
+
+```bash
+grep -o '"gpt-[^"]*codex[^"]*"\|"codex-[^"]*"' \
+  /opt/homebrew/lib/node_modules/openclaw/node_modules/@mariozechner/pi-ai/dist/models.generated.d.ts \
+  | sort -u
+```
+
+列出 OpenClaw 上游提供商注册的所有 Codex 模型 ID。
+
+**方法三 — 关注上游源**
+
+- [OpenClaw Releases](https://github.com/openclaw/openclaw/releases) — 新版本会带模型列表更新
+- [@mariozechner/pi-ai](https://www.npmjs.com/package/@mariozechner/pi-ai) npm 包 — 实际的提供商实现
+- [OpenAI 官方公告](https://openai.com/blog) — 官方模型发布
 
 ### 快速开始
 
