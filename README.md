@@ -112,14 +112,16 @@ Or use **Manual Import**: copy `access` / `refresh` / `expires` from `~/.opencla
 
 ## Client Configuration
 
-Any OpenAI-compatible client (OpenClaw, Cherry Studio, OpenWebUI, etc.):
+Any OpenAI-compatible client (OpenClaw, Cherry Studio, OpenWebUI, Cursor, etc.):
 
 ```
 Base URL:  http://<your-server-ip>:8047/v1
 API Key:   sk-codex-hub-2025   (configurable in Settings)
 ```
 
-Example with curl:
+### curl Examples
+
+**Chat Completions** (`/v1/chat/completions`):
 
 ```bash
 curl -X POST http://localhost:8047/v1/chat/completions \
@@ -130,6 +132,91 @@ curl -X POST http://localhost:8047/v1/chat/completions \
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
+
+**Streaming** (SSE):
+
+```bash
+curl -X POST http://localhost:8047/v1/chat/completions \
+  -H "Authorization: Bearer sk-codex-hub-2025" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5.3-codex",
+    "stream": true,
+    "messages": [{"role": "user", "content": "Write a haiku about coding"}]
+  }'
+```
+
+**Responses API** (`/v1/responses`):
+
+```bash
+curl -X POST http://localhost:8047/v1/responses \
+  -H "Authorization: Bearer sk-codex-hub-2025" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5.3-codex",
+    "input": "Explain quicksort in one paragraph"
+  }'
+```
+
+**List available models** (`/v1/models`):
+
+```bash
+curl http://localhost:8047/v1/models \
+  -H "Authorization: Bearer sk-codex-hub-2025"
+```
+
+### OpenClaw Configuration
+
+Add a custom provider in `~/.openclaw/openclaw.json`:
+
+```jsonc
+{
+  "models": {
+    "providers": [
+      {
+        "name": "codex-hub",
+        "type": "openai",              // standard OpenAI-compatible
+        "baseUrl": "http://<your-server-ip>:8047/v1",
+        "apiKey": "sk-codex-hub-2025",
+        "models": [
+          { "id": "gpt-5.3-codex",     "name": "GPT-5.3 Codex (Latest)" },
+          { "id": "gpt-5.2-codex",     "name": "GPT-5.2 Codex" },
+          { "id": "gpt-5.1-codex",     "name": "GPT-5.1 Codex" },
+          { "id": "gpt-5.1-codex-max", "name": "GPT-5.1 Codex Max" },
+          { "id": "gpt-5.1-codex-mini","name": "GPT-5.1 Codex Mini" },
+          { "id": "gpt-5-codex",       "name": "GPT-5 Codex" }
+        ]
+      }
+    ]
+  },
+  "defaults": {
+    "models": {
+      "codex-hub/gpt-5.3-codex": {}
+    }
+  }
+}
+```
+
+Then use the model in OpenClaw:
+
+```bash
+# Set as default model
+openclaw model codex-hub/gpt-5.3-codex
+
+# Or use per-session
+/model codex-hub/gpt-5.3-codex
+```
+
+### Other Clients
+
+| Client | Base URL | API Key |
+|--------|----------|---------|
+| Cherry Studio | `http://<ip>:8047/v1` | `sk-codex-hub-2025` |
+| OpenWebUI | `http://<ip>:8047/v1` | `sk-codex-hub-2025` |
+| Cursor | `http://<ip>:8047/v1` | `sk-codex-hub-2025` |
+| Any OpenAI SDK | `http://<ip>:8047/v1` | `sk-codex-hub-2025` |
+
+> **Tip:** The API key is configurable in the web UI → Settings tab.
 
 ---
 
