@@ -66,18 +66,133 @@ tr:last-child td{border-bottom:none}
 .model-detail table{min-width:auto}
 .model-detail td,.model-detail th{padding:4px 8px;font-size:12px}
 </style>
+
+<script>
+const I18N = {
+  zh: {
+    title:'Codex Hub', health_prefix:'运行中', health_accounts:'账号',
+    nav_accounts:'账号', nav_models:'模型', nav_stats:'统计', nav_logs:'日志', nav_settings:'设置',
+    btn_export_sel:'⬇ 导出选中', btn_export_all:'⬇ 全部导出', btn_import:'⬆ 导入',
+    btn_add:'+ 添加账号', card_accounts:'账号管理', card_api:'API 接入配置',
+    col_email:'账号', col_status:'状态', col_expire:'到期', col_calls:'调用',
+    col_tokens:'输入/输出', col_detail:'详情', col_action:'操作',
+    status_active:'正常', status_disabled:'已禁用', status_error:'错误',
+    btn_enable:'启用', btn_disable:'禁用', btn_reset:'重置', btn_delete:'删除',
+    btn_export_sel2:'⬇ 导出选中', label_baseurl:'Base URL', label_apikey:'API Key',
+    btn_copy:'复制', proto_hint:'协议: /v1/chat/completions · /v1/responses · /v1/models',
+    stat_total:'总请求数', stat_today:'今日请求', stat_in:'输入 Tokens', stat_out:'输出 Tokens',
+    stat_ok:'成功', stat_fail:'失败', stat_top:'模型排行', stat_acct:'各账号统计',
+    col_acct_in:'输入', col_acct_out:'输出',
+    log_title:'请求日志', btn_refresh:'刷新',
+    col_time:'时间', col_model:'模型', col_latency:'耗时',
+    settings_title:'系统设置', label_rate:'每账号每小时限速', btn_save:'保存',
+    model_title:'Codex 可用模型', btn_scan:'🔍 扫描新模型', btn_testall:'⚡ 全部测试',
+    col_tier:'', col_name:'名称', col_avail:'状态', col_lat:'延迟',
+    status_untested:'未测试', status_ok:'可用', status_fail2:'不可用',
+    modal_title:'添加账号', tab_oauth:'🔗 OAuth', tab_manual:'📋 手动导入',
+    oauth_hint:'点击登录，完成后粘贴回调地址', btn_open_oauth:'🚀 打开登录页面',
+    label_callback:'回调地址', btn_submit:'提交',
+    manual_hint:'从 auth.json 复制 openai-codex 的 token',
+    label_access:'access_token', label_refresh:'refresh_token',
+    label_expires:'expires（时间戳）', btn_import2:'导入',
+    mm_no_data:'暂无调用记录', col_mm_calls:'调用', col_mm_in:'输入',
+    col_mm_out:'输出', col_mm_err:'错误',
+    scan_scanning:'扫描中...', scan_new:'发现 {n} 个新模型: {list}',
+    scan_none:'未发现新模型，共 {n} 个',
+    test_running:'正在测试所有模型...',
+    test_done:'测试完成: {ok}/{total} 个可用',
+    no_accounts:'暂无账号', loading:'加载中...',
+    confirm_delete:'确认删除？', copied:'已复制',
+    import_done:'导入 {n} 个', json_error:'JSON 错误',
+    select_first:'请先勾选账号', all_fields:'填写所有字段',
+    saved:'✅ 已保存', no_active:'暂无',
+    lang_toggle:'English'
+  },
+  en: {
+    title:'Codex Hub', health_prefix:'Running', health_accounts:'accounts',
+    nav_accounts:'Accounts', nav_models:'Models', nav_stats:'Stats', nav_logs:'Logs', nav_settings:'Settings',
+    btn_export_sel:'⬇ Export Selected', btn_export_all:'⬇ Export All', btn_import:'⬆ Import',
+    btn_add:'+ Add Account', card_accounts:'Account Management', card_api:'API Configuration',
+    col_email:'Account', col_status:'Status', col_expire:'Expires', col_calls:'Calls',
+    col_tokens:'In/Out Tokens', col_detail:'Detail', col_action:'Actions',
+    status_active:'Active', status_disabled:'Disabled', status_error:'Error',
+    btn_enable:'Enable', btn_disable:'Disable', btn_reset:'Reset', btn_delete:'Delete',
+    btn_export_sel2:'⬇ Export', label_baseurl:'Base URL', label_apikey:'API Key',
+    btn_copy:'Copy', proto_hint:'Protocol: /v1/chat/completions · /v1/responses · /v1/models',
+    stat_total:'Total Requests', stat_today:"Today's Requests", stat_in:'Input Tokens', stat_out:'Output Tokens',
+    stat_ok:'Success', stat_fail:'Failed', stat_top:'Top Models', stat_acct:'Per-Account Stats',
+    col_acct_in:'Input', col_acct_out:'Output',
+    log_title:'Request Logs', btn_refresh:'Refresh',
+    col_time:'Time', col_model:'Model', col_latency:'Latency',
+    settings_title:'Settings', label_rate:'Rate Limit / Account / Hour', btn_save:'Save',
+    model_title:'Codex Models', btn_scan:'🔍 Scan New', btn_testall:'⚡ Test All',
+    col_tier:'', col_name:'Name', col_avail:'Status', col_lat:'Latency',
+    status_untested:'Untested', status_ok:'Available', status_fail2:'Unavailable',
+    modal_title:'Add Account', tab_oauth:'🔗 OAuth', tab_manual:'📋 Manual Import',
+    oauth_hint:'Click to login, then paste the callback URL', btn_open_oauth:'🚀 Open Login Page',
+    label_callback:'Callback URL', btn_submit:'Submit',
+    manual_hint:'Copy access/refresh/expires from auth.json (openai-codex)',
+    label_access:'access_token', label_refresh:'refresh_token',
+    label_expires:'expires (timestamp)', btn_import2:'Import',
+    mm_no_data:'No usage data', col_mm_calls:'Calls', col_mm_in:'Input',
+    col_mm_out:'Output', col_mm_err:'Errors',
+    scan_scanning:'Scanning...', scan_new:'Found {n} new model(s): {list}',
+    scan_none:'No new models found. Total: {n}',
+    test_running:'Testing all models...',
+    test_done:'Done: {ok}/{total} available',
+    no_accounts:'No accounts yet', loading:'Loading...',
+    confirm_delete:'Confirm delete?', copied:'Copied!',
+    import_done:'Imported {n}', json_error:'JSON parse error',
+    select_first:'Please select accounts first', all_fields:'Fill in all fields',
+    saved:'✅ Saved', no_active:'None',
+    lang_toggle:'中文'
+  }
+};
+let LANG = localStorage.getItem('hub_lang') || 'zh';
+function t(k, vars) {
+  let s = (I18N[LANG]||I18N.zh)[k] || k;
+  if (vars) Object.keys(vars).forEach(v => s = s.replace('{'+v+'}', vars[v]));
+  return s;
+}
+function setLang(l) {
+  LANG = l; localStorage.setItem('hub_lang', l);
+  applyLang();
+}
+function toggleLang() {
+  setLang(LANG === 'zh' ? 'en' : 'zh');
+}
+function applyLang() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.getAttribute('data-i18n');
+    el.textContent = t(k);
+  });
+  document.getElementById('lang-btn').textContent = t('lang_toggle');
+  // re-render dynamic content
+  loadAccounts && loadAccounts();
+  // re-render current page
+  const cur = document.querySelector('.page.active');
+  if(cur){
+    const id = cur.id;
+    if(id==='page-stats') loadStats();
+    if(id==='page-logs') loadLogs(0);
+    if(id==='page-models') loadModels();
+  }
+}
+</script>
+
 </head>
 <body>
 <div class="header">
 <div style="font-size:20px">🦞</div>
 <h1>Codex Hub</h1>
 <span class="badge" id="health-badge">...</span>
+<button id="lang-btn" onclick="toggleLang()" style="background:#2d3148;border:none;color:#e2e8f0;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:13px;margin-right:8px">English</button>
 <nav class="nav">
-<button class="nav-btn active" onclick="showPage('accounts',this)">账号</button>
-<button class="nav-btn" onclick="showPage('stats',this)">统计</button>
-<button class="nav-btn" onclick="showPage('logs',this)">日志</button>
-<button class="nav-btn" onclick="showPage('models',this)">模型</button>
-<button class="nav-btn" onclick="showPage('settings',this)">设置</button>
+<button class="nav-btn active" onclick="showPage('accounts',this)" data-i18n="nav_accounts">账号</button>
+<button class="nav-btn" onclick="showPage('stats',this)" data-i18n="nav_stats">统计</button>
+<button class="nav-btn" onclick="showPage('logs',this)" data-i18n="nav_logs">日志</button>
+<button class="nav-btn" onclick="showPage('models',this)" data-i18n="nav_models">模型</button>
+<button class="nav-btn" onclick="showPage('settings',this)" data-i18n="nav_settings">设置</button>
 </nav>
 </div>
 <div class="container">
@@ -87,11 +202,11 @@ tr:last-child td{border-bottom:none}
 <div class="top-bar">
 <div class="card-title" style="margin:0">账号管理</div>
 <div style="display:flex;gap:8px;flex-wrap:wrap">
-<button class="btn btn-ghost btn-sm" onclick="exportSelected()">⬇ 导出选中</button>
-<button class="btn btn-ghost btn-sm" onclick="exportAll()">⬇ 全部导出</button>
-<button class="btn btn-ghost btn-sm" onclick="document.getElementById('import-file').click()">⬆ 导入</button>
+<button class="btn btn-ghost btn-sm" onclick="exportSelected()" data-i18n="btn_export_sel">⬇ 导出选中</button>
+<button class="btn btn-ghost btn-sm" onclick="exportAll()" data-i18n="btn_export_all">⬇ 全部导出</button>
+<button class="btn btn-ghost btn-sm" onclick="document.getElementById('import-file').click()" data-i18n="btn_import">⬆ 导入</button>
 <input type="file" id="import-file" accept=".json" style="display:none" onchange="importAccounts(this)">
-<button class="btn btn-success" onclick="openModal()">+ 添加账号</button>
+<button class="btn btn-success" onclick="openModal() data-i18n="btn_add">+ 添加账号</button>
 </div>
 </div>
 <div class="tbl-wrap" id="accounts-table"><div class="empty">加载中...</div></div>
@@ -122,7 +237,7 @@ tr:last-child td{border-bottom:none}
 
 <div class="page" id="page-logs">
 <div class="card">
-<div class="top-bar"><div class="card-title" style="margin:0">请求日志</div><button class="btn btn-ghost btn-sm" onclick="loadLogs(0)">刷新</button></div>
+<div class="top-bar"><div class="card-title" style="margin:0">请求日志</div><button class="btn btn-ghost btn-sm" onclick="loadLogs(0)" data-i18n="btn_refresh">刷新</button></div>
 <div class="tbl-wrap" id="logs-table"><div class="empty">加载中...</div></div>
 <div class="pagination" id="logs-pagination"></div>
 </div>
@@ -133,8 +248,8 @@ tr:last-child td{border-bottom:none}
 <div class="top-bar">
 <div class="card-title" style="margin:0">Codex 可用模型</div>
 <div style="display:flex;gap:8px;flex-wrap:wrap">
-<button class="btn btn-ghost btn-sm" onclick="scanModels()">🔍 扫描新模型</button>
-<button class="btn btn-primary btn-sm" onclick="testAllModels()">⚡ 全部测试</button>
+<button class="btn btn-ghost btn-sm" onclick="scanModels()" data-i18n="btn_scan">🔍 扫描新模型</button>
+<button class="btn btn-primary btn-sm" onclick="testAllModels()" data-i18n="btn_testall">⚡ 全部测试</button>
 </div>
 </div>
 <div id="scan-alert"></div>
@@ -149,7 +264,7 @@ tr:last-child td{border-bottom:none}
 <div class="form-group"><label>API Key</label><input class="input" id="setting-api-key"></div>
 <div class="form-group"><label>每账号每小时限速</label><input class="input" id="setting-rate" type="number"></div>
 </div>
-<button class="btn btn-primary" onclick="saveSettings()">保存</button>
+<button class="btn btn-primary" onclick="saveSettings()" data-i18n="btn_save">保存</button>
 </div>
 </div>
 </div>
@@ -157,8 +272,8 @@ tr:last-child td{border-bottom:none}
 <!-- 添加账号弹窗 -->
 <div class="modal" id="modal">
 <div class="modal-box">
-<div style="display:flex;justify-content:space-between;margin-bottom:16px"><h3>添加账号</h3><button onclick="closeModal()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:20px">✕</button></div>
-<div class="tabs"><div class="tab active" onclick="switchTab('oauth')">🔗 OAuth</div><div class="tab" onclick="switchTab('manual')">📋 手动导入</div></div>
+<div style="display:flex;justify-content:space-between;margin-bottom:16px"><h3 data-i18n="modal_title">添加账号</h3><button onclick="closeModal()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:20px">✕</button></div>
+<div class="tabs"><div class="tab active" onclick="switchTab('oauth')" data-i18n="tab_oauth">🔗 OAuth</div><div class="tab" onclick="switchTab('manual')" data-i18n="tab_manual">📋 手动导入</div></div>
 <div id="tab-oauth"><p style="font-size:13px;color:#94a3b8;margin-bottom:14px">点击登录，完成后粘贴回调地址</p><div id="oauth-alert"></div><button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="startOAuth()">🚀 打开登录页面</button><hr class="divider"><div class="form-group"><label>回调地址</label><input class="input" id="callback-url" placeholder="http://localhost:1455/auth/callback?code=..."></div><button class="btn btn-success" style="width:100%" onclick="submitCallback()">提交</button></div>
 <div id="tab-manual" style="display:none"><p style="font-size:13px;color:#94a3b8;margin-bottom:14px">从 auth.json 复制 openai-codex 的 token</p><div id="manual-alert"></div><div class="form-group"><label>access_token</label><textarea class="input" id="m-access" rows="3"></textarea></div><div class="form-group"><label>refresh_token</label><textarea class="input" id="m-refresh" rows="2"></textarea></div><div class="form-group"><label>expires（时间戳）</label><input class="input" id="m-expires" type="number"></div><button class="btn btn-success" style="width:100%" onclick="submitManual()">导入</button></div>
 </div>
@@ -177,7 +292,7 @@ const PS=50;let logPage=0;
 function showPage(n,el){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.getElementById('page-'+n).classList.add('active');if(el)el.classList.add('active');if(n==='models')loadModels();if(n==='stats')loadStats();if(n==='logs')loadLogs(0);if(n==='settings')loadSettings();}
 async function api(p,o={}){const r=await fetch(p,o);return r.json().catch(()=>({}));}
 async function init(){await Promise.all([loadHealth(),loadAccounts(),loadApiKey()]);setInterval(()=>{loadHealth();loadAccounts();},15000);}
-async function loadHealth(){try{const h=await api('/health');const e=document.getElementById('health-badge');e.textContent='运行中 '+(h.active_accounts||0)+' 账号';e.style.background='#10b981';}catch{document.getElementById('health-badge').textContent='离线';}}
+async function loadHealth(){try{const h=await api('/health');const e=document.getElementById('health-badge');e.textContent=t('health_prefix')+' '+(h.active_accounts||0)+' '+t('health_accounts');e.style.background='#10b981';}catch{document.getElementById('health-badge').textContent='离线';}}
 async function loadApiKey(){const s=await api('/api/settings');document.getElementById('api-key-display').textContent=s.api_key||'';}
 async function loadAccounts(){const a=await api('/api/accounts');renderAccounts(a);}
 function renderAccounts(accounts){const el=document.getElementById('accounts-table');if(!accounts.length){el.innerHTML='<div class="empty">暂无账号</div>';return;}
@@ -185,30 +300,30 @@ const rows=accounts.map(a=>{const dis=a.disabled;const cls=dis?'disabled-row':''
 el.innerHTML='<table><thead><tr><th><input type="checkbox" class="cb" onchange="toggleAll(this)"></th><th>账号</th><th>状态</th><th>到期</th><th>调用</th><th>输入/输出</th><th>详情</th><th>操作</th></tr></thead><tbody>'+rows+'</tbody></table>';}
 
 async function toggleAccount(id,dis){await api('/api/accounts/'+id+'/'+(dis?'disable':'enable'),{method:'POST'});loadAccounts();}
-async function deleteAccount(id){if(!confirm('确认删除？'))return;await api('/api/accounts/'+id,{method:'DELETE'});loadAccounts();}
+async function deleteAccount(id){if(!confirm(t('confirm_delete')))return;await api('/api/accounts/'+id,{method:'DELETE'});loadAccounts();}
 async function resetAccount(id){await api('/api/accounts/'+id+'/reset',{method:'POST'});loadAccounts();}
 function toggleAll(el){document.querySelectorAll('.acct-cb').forEach(c=>c.checked=el.checked);}
 
-async function exportSelected(){const ids=[...document.querySelectorAll('.acct-cb:checked')].map(c=>parseInt(c.value));if(!ids.length){alert('请先勾选账号');return;}const data=await api('/api/accounts/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});dl(data);}
+async function exportSelected(){const ids=[...document.querySelectorAll('.acct-cb:checked')].map(c=>parseInt(c.value));if(!ids.length){alert(t('select_first'));return;}const data=await api('/api/accounts/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});dl(data);}
 async function exportAll(){const data=await api('/api/accounts/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});dl(data);}
 function dl(data){const b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='codex-hub-'+Date.now()+'.json';a.click();}
-async function importAccounts(input){const f=input.files[0];if(!f)return;const t=await f.text();let d;try{d=JSON.parse(t);}catch{alert('JSON 错误');return;}const arr=Array.isArray(d)?d:[d];const r=await api('/api/accounts/import-batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accounts:arr})});alert('导入 '+r.imported+' 个');loadAccounts();input.value='';}
+async function importAccounts(input){const f=input.files[0];if(!f)return;const t=await f.text();let d;try{d=JSON.parse(t);}catch{alert(t('json_error'));return;}const arr=Array.isArray(d)?d:[d];const r=await api('/api/accounts/import-batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accounts:arr})});alert(t('import_done',{n:r.imported}));loadAccounts();input.value='';}
 
-async function showModelStats(id,email){document.getElementById('mm-title').textContent=email+' - 模型统计';document.getElementById('mm-body').innerHTML='<div class="empty">加载中...</div>';document.getElementById('model-modal').classList.add('open');const data=await api('/api/accounts/'+id+'/model-stats');if(!data.length){document.getElementById('mm-body').innerHTML='<div class="empty">暂无调用记录</div>';return;}
+async function showModelStats(id,email){document.getElementById('mm-title').textContent=email+' - 模型统计';document.getElementById('mm-body').innerHTML='<div class="empty">加载中...</div>';document.getElementById('model-modal').classList.add('open');const data=await api('/api/accounts/'+id+'/model-stats');if(!data.length){document.getElementById('mm-body').innerHTML='<div class="empty">'+t('mm_no_data')+'</div>';return;}
 const rows=data.map(m=>'<tr><td style="font-family:monospace">'+m.model+'</td><td style="text-align:right">'+m.calls+'</td><td style="text-align:right">'+fmtT(m.input_tokens)+'</td><td style="text-align:right">'+fmtT(m.output_tokens)+'</td><td style="text-align:right;color:'+(m.errors?'#ef4444':'#64748b')+'">'+m.errors+'</td></tr>').join('');
-document.getElementById('mm-body').innerHTML='<div class="tbl-wrap"><table><thead><tr><th>模型</th><th>调用</th><th>输入</th><th>输出</th><th>错误</th></tr></thead><tbody>'+rows+'</tbody></table></div>';}
+document.getElementById('mm-body').innerHTML='<div class="tbl-wrap"><table><thead><tr><th>Model</th><th>'+t('col_mm_calls')+'</th><th>'+t('col_mm_in')+'</th><th>'+t('col_mm_out')+'</th><th>'+t('col_mm_err')+'</th></tr></thead><tbody>'+rows+'</tbody></table></div>';}
 
 async function loadStats(){const s=await api('/api/stats');document.getElementById('s-total').textContent=s.total_requests||0;document.getElementById('s-today').textContent=s.today_requests||0;document.getElementById('s-in').textContent=fmtT(s.total_input_tokens);document.getElementById('s-out').textContent=fmtT(s.total_output_tokens);document.getElementById('s-ok').textContent=s.ok_requests||0;document.getElementById('s-err').textContent=s.error_requests||0;
-const ml=(s.top_models||[]).map(m=>'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #2d3148"><span style="color:#94a3b8">'+m.model+'</span><span>'+m.count+'</span></div>').join('')||'<div style="color:#64748b">暂无</div>';document.getElementById('s-models').innerHTML=ml;
-const accts=await api('/api/accounts');const ar=accts.map(a=>'<tr><td>'+a.email+'</td><td>'+fmtT(a.input_tokens)+'</td><td>'+fmtT(a.output_tokens)+'</td><td>'+a.use_count+'</td></tr>').join('');document.getElementById('acct-tokens').innerHTML='<table><thead><tr><th>账号</th><th>输入</th><th>输出</th><th>调用</th></tr></thead><tbody>'+(ar||'<tr><td colspan=4 style="text-align:center;color:#64748b">暂无</td></tr>')+'</tbody></table>';}
+const ml=(s.top_models||[]).map(m=>'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #2d3148"><span style="color:#94a3b8">'+m.model+'</span><span>'+m.count+'</span></div>').join('')||"'<div style=\"color:#64748b\">'+t('no_active')+'</div>'";document.getElementById('s-models').innerHTML=ml;
+const accts=await api('/api/accounts');const ar=accts.map(a=>'<tr><td>'+a.email+'</td><td>'+fmtT(a.input_tokens)+'</td><td>'+fmtT(a.output_tokens)+'</td><td>'+a.use_count+'</td></tr>').join('');document.getElementById('acct-tokens').innerHTML='<table><thead><tr><th>'+t('col_email')+'</th><th>'+t('col_acct_in')+'</th><th>'+t('col_acct_out')+'</th><th>'+t('col_calls')+'</th></tr></thead><tbody>'+(ar||'<tr><td colspan=4 style="text-align:center;color:#64748b">'+t('no_active')+'</td></tr>')+'</tbody></table>';}
 
 async function loadLogs(off){logPage=off;const d=await api('/api/logs?limit='+PS+'&offset='+off);const logs=d.logs||[];const total=d.total||0;const el=document.getElementById('logs-table');if(!logs.length){el.innerHTML='<div class="empty">暂无日志</div>';document.getElementById('logs-pagination').innerHTML='';return;}
 const rows=logs.map(l=>{const t=new Date(l.created_at*1000).toLocaleString('zh-CN');const b=l.status==='ok'?'<span class="badge-ok">成功</span>':'<span class="badge-err">失败</span>';return '<tr><td style="font-size:11px;color:#64748b;white-space:nowrap">'+t+'</td><td>'+l.account_email+'</td><td style="font-family:monospace;font-size:12px">'+(l.model||'-')+'</td><td>'+b+'</td><td style="text-align:right">'+(l.input_tokens||0)+'</td><td style="text-align:right">'+(l.output_tokens||0)+'</td><td style="text-align:right">'+(l.latency_ms||0)+'ms</td></tr>';}).join('');
-el.innerHTML='<table><thead><tr><th>时间</th><th>账号</th><th>模型</th><th>状态</th><th>输入</th><th>输出</th><th>耗时</th></tr></thead><tbody>'+rows+'</tbody></table>';
+el.innerHTML='<table><thead><tr><th>'+t('col_time')+'</th><th>'+t('col_email')+'</th><th>'+t('col_model')+'</th><th>'+t('col_status')+'</th><th>'+t('col_acct_in')+'</th><th>'+t('col_acct_out')+'</th><th>'+t('col_latency')+'</th></tr></thead><tbody>'+rows+'</tbody></table>';
 const pages=Math.ceil(total/PS),cur=Math.floor(off/PS);let pg='';if(pages>1){pg+='<button class="btn btn-ghost btn-sm" '+(cur===0?'disabled':'')+' onclick="loadLogs('+(cur-1)*PS+')">‹</button><span style="color:#64748b;font-size:13px">'+(cur+1)+'/'+pages+'</span><button class="btn btn-ghost btn-sm" '+(cur>=pages-1?'disabled':'')+' onclick="loadLogs('+(cur+1)*PS+')">›</button>';}document.getElementById('logs-pagination').innerHTML=pg;}
 
 async function loadSettings(){const s=await api('/api/settings');document.getElementById('setting-api-key').value=s.api_key||'';document.getElementById('setting-rate').value=s.rate_limit_per_hour||'50';}
-async function saveSettings(){await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:document.getElementById('setting-api-key').value.trim(),rate_limit_per_hour:document.getElementById('setting-rate').value})});await loadApiKey();alert('✅ 已保存');}
+async function saveSettings(){await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:document.getElementById('setting-api-key').value.trim(),rate_limit_per_hour:document.getElementById('setting-rate').value})});await loadApiKey();alert(t('saved'));}
 
 function openModal(){document.getElementById('modal').classList.add('open');}
 function closeModal(){document.getElementById('modal').classList.remove('open');loadAccounts();}
@@ -217,7 +332,7 @@ async function startOAuth(){const d=await api('/api/accounts/oauth',{method:'POS
 async function submitCallback(){const url=document.getElementById('callback-url').value.trim();if(!url)return setA('oauth-alert','error','请填写回调地址');try{const u=new URL(url);const c=u.searchParams.get('code'),s=u.searchParams.get('state');if(!c||!s)return setA('oauth-alert','error','缺少 code/state');const r=await fetch('/auth/callback?code='+encodeURIComponent(c)+'&state='+encodeURIComponent(s));if(r.ok){setA('oauth-alert','success','✅ 添加成功');setTimeout(closeModal,1500);}else setA('oauth-alert','error','失败');}catch(e){setA('oauth-alert','error',e.message);}}
 async function submitManual(){const a=document.getElementById('m-access').value.trim(),rf=document.getElementById('m-refresh').value.trim(),ex=parseInt(document.getElementById('m-expires').value);if(!a||!rf||!ex)return setA('manual-alert','error','填写所有字段');const exp=ex>9999999999?Math.floor(ex/1000):ex;const d=await api('/api/accounts/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({access:a,refresh:rf,expires:exp})});if(d.email){setA('manual-alert','success','✅ '+d.email);setTimeout(closeModal,1500);}else setA('manual-alert','error',JSON.stringify(d));}
 function setA(id,t,m){document.getElementById(id).innerHTML='<div class="alert alert-'+t+'">'+m+'</div>';}
-function copyText(t){navigator.clipboard.writeText(t).then(()=>alert('已复制'));}
+function copyText(t){navigator.clipboard.writeText(t).then(()=>alert(t('copied')));}
 function fmtT(n){n=n||0;if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return String(n);}
 
 async function loadModels(){const models=await api('/api/models');renderModels(models,[]);}
@@ -225,9 +340,9 @@ function renderModels(models,results){const el=document.getElementById('models-t
 const rows=models.map(m=>{const r=rmap[m.id];const tier={'latest':'🟢','standard':'🔵','max':'🟣','mini':'⚪','experimental':'🟡'}[m.tier]||'⚫';let st='<span style="color:#64748b">未测试</span>';let lat='';if(r){if(r.status==='ok'){st='<span class="badge-ok">可用</span>';lat=r.latency_ms+'ms';}else{st='<span class="badge-err">不可用</span>';lat='<span style="font-size:11px;color:#ef4444">'+(r.error||'').slice(0,50)+'</span>';}}
 return '<tr><td>'+tier+'</td><td style="font-family:monospace;font-size:13px">'+m.id+'</td><td>'+m.name+'</td><td>'+st+'</td><td>'+lat+'</td><td><button class="btn btn-ghost btn-sm" onclick="testOne(\x27'+m.id+'\x27)">测试</button></td></tr>';}).join('');
 el.innerHTML='<table><thead><tr><th></th><th>模型 ID</th><th>名称</th><th>状态</th><th>延迟</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';}
-async function scanModels(){document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">扫描中...</div>';const d=await api('/api/models/scan');if(d.new&&d.new.length>0){document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">发现 '+d.new.length+' 个新模型: '+d.new.join(', ')+'</div>';}else{document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">未发现新模型，共 '+d.scanned.length+' 个</div>';}loadModels();}
+async function scanModels(){document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">'+t('scan_scanning')+'</div>';const d=await api('/api/models/scan');if(d.new&&d.new.length>0){document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">'+t('scan_new',{n:d.new.length,list:d.new.join(', ')})+'</div>';}else{document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">'+t('scan_none',{n:d.scanned.length})+'</div>';}loadModels();}
 async function testOne(mid){const r=await api('/api/models/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:mid})});const models=await api('/api/models');renderModels(models,[r]);}
-async function testAllModels(){document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">正在测试所有模型...</div>';const results=await api('/api/models/test-all',{method:'POST'});const models=await api('/api/models');const ok=results.filter(r=>r.status==='ok').length;document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">测试完成: '+ok+'/'+results.length+' 个可用</div>';renderModels(models,results);}
+async function testAllModels(){document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">'+t('test_running')+'</div>';const results=await api('/api/models/test-all',{method:'POST'});const models=await api('/api/models');const ok=results.filter(r=>r.status==='ok').length;document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">'+t('test_done',{ok:ok,total:results.length})+'</div>';renderModels(models,results);}
 
 init();
 </script>
