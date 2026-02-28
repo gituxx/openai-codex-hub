@@ -1,4 +1,4 @@
-"""数据库层 - SQLite 账号管理 + 流量日志 + Token 统计"""
+"""数据库层 - SQLite 账号管理 + 流量日志 + Token 统计 + 冷却机制"""
 import sqlite3
 import time
 from pathlib import Path
@@ -28,6 +28,8 @@ def init_db():
             use_count     INTEGER DEFAULT 0,
             input_tokens  INTEGER DEFAULT 0,
             output_tokens INTEGER DEFAULT 0,
+            cooldown_until INTEGER DEFAULT 0,
+            error_count   INTEGER DEFAULT 0,
             created_at    INTEGER DEFAULT (strftime('%s','now'))
         );
 
@@ -52,15 +54,16 @@ def init_db():
         INSERT OR IGNORE INTO settings VALUES ('api_key', 'sk-codex-hub-2025');
         INSERT OR IGNORE INTO settings VALUES ('rate_limit_per_hour', '50');
         """)
-        # 迁移旧表缺失列
         _migrate(conn)
 
 def _migrate(conn):
     existing = [r[1] for r in conn.execute("PRAGMA table_info(accounts)").fetchall()]
     for col, ddl in [
-        ("input_tokens",  "ALTER TABLE accounts ADD COLUMN input_tokens INTEGER DEFAULT 0"),
-        ("output_tokens", "ALTER TABLE accounts ADD COLUMN output_tokens INTEGER DEFAULT 0"),
-        ("disabled",      "ALTER TABLE accounts ADD COLUMN disabled INTEGER DEFAULT 0"),
+        ("input_tokens",   "ALTER TABLE accounts ADD COLUMN input_tokens INTEGER DEFAULT 0"),
+        ("output_tokens",  "ALTER TABLE accounts ADD COLUMN output_tokens INTEGER DEFAULT 0"),
+        ("disabled",       "ALTER TABLE accounts ADD COLUMN disabled INTEGER DEFAULT 0"),
+        ("cooldown_until", "ALTER TABLE accounts ADD COLUMN cooldown_until INTEGER DEFAULT 0"),
+        ("error_count",    "ALTER TABLE accounts ADD COLUMN error_count INTEGER DEFAULT 0"),
     ]:
         if col not in existing:
             conn.execute(ddl)
@@ -77,7 +80,7 @@ def set_setting(key: str, value: str):
 def add_account(email: str, access: str, refresh: str, expires: int) -> int:
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT OR REPLACE INTO accounts (email,access,refresh,expires,status,disabled) VALUES (?,?,?,?,'active',0)",
+            "INSERT OR REPLACE INTO accounts (email,access,refresh,expires,status,disabled,cooldown_until,error_count) VALUES (?,?,?,?,'active',0,0,0)",
             (email, access, refresh, expires)
         )
         return cur.lastrowid
@@ -85,13 +88,31 @@ def add_account(email: str, access: str, refresh: str, expires: int) -> int:
 def get_all_accounts():
     with get_conn() as conn:
         return [dict(r) for r in conn.execute(
-            "SELECT id,email,expires,status,disabled,last_used,use_count,last_error,input_tokens,output_tokens FROM accounts ORDER BY id"
+            "SELECT id,email,expires,status,disabled,last_used,use_count,last_error,input_tokens,output_tokens,cooldown_until,error_count FROM accounts ORDER BY id"
         ).fetchall()]
 
 def get_active_accounts():
+    """获取可用账号：active + 未禁用 + 不在冷却中，按 error_count 升序 + last_used 升序"""
+    now = int(time.time())
     with get_conn() as conn:
         return [dict(r) for r in conn.execute(
-            "SELECT * FROM accounts WHERE status='active' AND disabled=0 ORDER BY last_used ASC"
+            "SELECT * FROM accounts WHERE status='active' AND disabled=0 AND cooldown_until<=? ORDER BY error_count ASC, last_used ASC",
+            (now,)
+        ).fetchall()]
+
+def get_available_accounts_excluding(exclude_ids: list):
+    """获取可用账号，排除指定 ID 列表"""
+    now = int(time.time())
+    with get_conn() as conn:
+        if not exclude_ids:
+            return [dict(r) for r in conn.execute(
+                "SELECT * FROM accounts WHERE status='active' AND disabled=0 AND cooldown_until<=? ORDER BY error_count ASC, last_used ASC",
+                (now,)
+            ).fetchall()]
+        placeholders = ",".join("?" * len(exclude_ids))
+        return [dict(r) for r in conn.execute(
+            f"SELECT * FROM accounts WHERE status='active' AND disabled=0 AND cooldown_until<=? AND id NOT IN ({placeholders}) ORDER BY error_count ASC, last_used ASC",
+            [now] + exclude_ids
         ).fetchall()]
 
 def update_account_tokens(account_id: int, access: str, refresh: str, expires: int):
@@ -108,11 +129,28 @@ def mark_account_used(account_id: int):
             (int(time.time()), account_id)
         )
 
+def mark_account_success(account_id: int):
+    """请求成功：重置连续错误计数"""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE accounts SET error_count=0,last_error=NULL WHERE id=?",
+            (account_id,)
+        )
+
 def mark_account_error(account_id: int, error: str):
     with get_conn() as conn:
         conn.execute(
             "UPDATE accounts SET status='error',last_error=? WHERE id=?",
             (error[:500], account_id)
+        )
+
+def mark_account_cooldown(account_id: int, error: str, cooldown_seconds: int):
+    """账号进入冷却：不标 error，到期自动可用"""
+    now = int(time.time())
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE accounts SET cooldown_until=?,error_count=error_count+1,last_error=? WHERE id=?",
+            (now + cooldown_seconds, error[:500], account_id)
         )
 
 def set_account_disabled(account_id: int, disabled: bool):
@@ -125,7 +163,7 @@ def delete_account(account_id: int):
 
 def reset_account_status(account_id: int):
     with get_conn() as conn:
-        conn.execute("UPDATE accounts SET status='active',last_error=NULL WHERE id=?", (account_id,))
+        conn.execute("UPDATE accounts SET status='active',last_error=NULL,cooldown_until=0,error_count=0 WHERE id=?", (account_id,))
 
 def log_request(account_id: int, email: str, model: str,
                 input_tokens: int, output_tokens: int,
@@ -186,6 +224,83 @@ def get_account_model_stats(account_id: int) -> list:
             ORDER BY calls DESC
         """, (account_id,)).fetchall()
         return [dict(r) for r in rows]
+
+def get_health_stats() -> dict:
+    """实时健康统计：近5分钟/近1小时请求情况 + 账号状态"""
+    now = int(time.time())
+    t5 = now - 300
+    t1h = now - 3600
+
+    with get_conn() as conn:
+        # --- 近5分钟 ---
+        rows_5 = conn.execute(
+            "SELECT COUNT(*) as total,"
+            " SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END) as ok,"
+            " SUM(CASE WHEN status!='ok' THEN 1 ELSE 0 END) as errors,"
+            " SUM(CASE WHEN error_msg LIKE '%HTTP 429%' THEN 1 ELSE 0 END) as s429,"
+            " SUM(CASE WHEN error_msg LIKE '%HTTP 401%' THEN 1 ELSE 0 END) as s401,"
+            " SUM(CASE WHEN error_msg LIKE '%HTTP 5%' THEN 1 ELSE 0 END) as s5xx,"
+            " AVG(latency_ms) as avg_lat"
+            " FROM request_logs WHERE created_at >= ?",
+            (t5,)
+        ).fetchone()
+
+        # --- 近1小时 ---
+        rows_1h = conn.execute(
+            "SELECT COUNT(*) as total,"
+            " SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END) as ok,"
+            " SUM(CASE WHEN status!='ok' THEN 1 ELSE 0 END) as errors,"
+            " SUM(CASE WHEN error_msg LIKE '%HTTP 429%' THEN 1 ELSE 0 END) as s429,"
+            " SUM(CASE WHEN error_msg LIKE '%HTTP 401%' THEN 1 ELSE 0 END) as s401,"
+            " SUM(CASE WHEN error_msg LIKE '%HTTP 5%' THEN 1 ELSE 0 END) as s5xx,"
+            " AVG(latency_ms) as avg_lat"
+            " FROM request_logs WHERE created_at >= ?",
+            (t1h,)
+        ).fetchone()
+
+        # --- 账号状态 ---
+        acct_active = conn.execute(
+            "SELECT COUNT(*) FROM accounts WHERE status='active' AND disabled=0 AND cooldown_until<=?",
+            (now,)
+        ).fetchone()[0]
+        acct_cooling = conn.execute(
+            "SELECT COUNT(*) FROM accounts WHERE status='active' AND disabled=0 AND cooldown_until>?",
+            (now,)
+        ).fetchone()[0]
+        acct_error = conn.execute(
+            "SELECT COUNT(*) FROM accounts WHERE status='error' AND disabled=0"
+        ).fetchone()[0]
+        acct_disabled = conn.execute(
+            "SELECT COUNT(*) FROM accounts WHERE disabled=1"
+        ).fetchone()[0]
+
+    def _build_period(row):
+        total = row["total"] or 0
+        ok = row["ok"] or 0
+        errors = row["errors"] or 0
+        rate = round(errors / total * 100, 1) if total > 0 else 0.0
+        return {
+            "total": total,
+            "ok": ok,
+            "errors": errors,
+            "error_rate": f"{rate}%",
+            "status_429": row["s429"] or 0,
+            "status_401": row["s401"] or 0,
+            "status_5xx": row["s5xx"] or 0,
+            "avg_latency_ms": int(row["avg_lat"] or 0),
+        }
+
+    return {
+        "last_5min": _build_period(rows_5),
+        "last_1h": _build_period(rows_1h),
+        "accounts_status": {
+            "active": acct_active,
+            "cooling": acct_cooling,
+            "error": acct_error,
+            "disabled": acct_disabled,
+        },
+    }
+
 
 def export_accounts(ids: list = None) -> list:
     with get_conn() as conn:

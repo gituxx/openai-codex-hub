@@ -55,6 +55,8 @@ tr:last-child td{border-bottom:none}
 .empty{text-align:center;padding:40px;color:#64748b}
 .badge-ok{background:#064e3b;color:#6ee7b7;padding:2px 8px;border-radius:4px;font-size:11px}
 .badge-err{background:#450a0a;color:#fca5a5;padding:2px 8px;border-radius:4px;font-size:11px}
+.badge-cooldown{background:#422006;color:#fbbf24;padding:2px 8px;border-radius:4px;font-size:11px;animation:pulse-cd 2s ease-in-out infinite}
+@keyframes pulse-cd{0%,100%{opacity:1}50%{opacity:.6}}
 .badge-dis{background:#374151;color:#9ca3af;padding:2px 8px;border-radius:4px;font-size:11px}
 .row-actions{display:flex;gap:6px;flex-wrap:wrap}
 .divider{border:none;border-top:1px solid #2d3148;margin:16px 0}
@@ -65,6 +67,13 @@ tr:last-child td{border-bottom:none}
 .model-detail{margin-top:8px;background:#0f1117;border-radius:8px;padding:12px;font-size:12px}
 .model-detail table{min-width:auto}
 .model-detail td,.model-detail th{padding:4px 8px;font-size:12px}
+.login-overlay{position:fixed;inset:0;background:#0f1117;z-index:200;display:flex;align-items:center;justify-content:center}
+.login-box{background:#1a1d2e;border:1px solid #2d3148;border-radius:16px;padding:40px 32px;width:100%;max-width:380px;text-align:center}
+.login-box h2{margin-bottom:8px;font-size:20px}
+.login-box p{color:#64748b;font-size:13px;margin-bottom:24px}
+.login-box .input{margin-bottom:16px;text-align:center;font-size:16px;letter-spacing:2px}
+.login-box .btn{width:100%;padding:12px;font-size:15px}
+.login-error{color:#ef4444;font-size:13px;margin-bottom:12px;min-height:18px}
 </style>
 
 <script>
@@ -124,7 +133,28 @@ const I18N = {
     oauth_opened:'已打开登录页面', oauth_fill_url:'请填写回调地址',
     oauth_missing_code:'缺少 code/state', oauth_success:'✅ 添加成功', oauth_fail:'失败',
     manual_fill_all:'填写所有字段',
-    proto_text:'协议: /v1/chat/completions · /v1/responses · /v1/models'
+    proto_text:'协议: /v1/chat/completions · /v1/responses · /v1/models',
+    status_cooldown:'冷却中',
+    cooldown_remaining:'剩余 {s}s',
+    col_errors:'连续错误',
+    error_count_label:'连续错误 {n} 次',
+    settings_label_password:'管理密码',
+    login_title:'请输入管理密码',
+    login_btn:'登录',
+    login_wrong:'密码错误',
+    health_title:'📊 实时健康',
+    health_refresh:'刷新',
+    health_last5:'近5分钟',
+    health_last1h:'近1小时',
+    health_acct_status:'账号状态',
+    health_requests:'请求',
+    health_success:'成功',
+    health_error_rate:'错误率',
+    health_latency:'延迟',
+    health_active:'✅ 活跃',
+    health_cooling:'⏳ 冷却',
+    health_error2:'❌ 错误',
+    health_disabled2:'⛔ 禁用'
   },
   en: {
     title:'Codex Hub', health_prefix:'Running', health_accounts:'accounts',
@@ -181,7 +211,28 @@ const I18N = {
     oauth_opened:'Login page opened', oauth_fill_url:'Please enter callback URL',
     oauth_missing_code:'Missing code/state', oauth_success:'✅ Added successfully', oauth_fail:'Failed',
     manual_fill_all:'Fill in all fields',
-    proto_text:'Protocol: /v1/chat/completions · /v1/responses · /v1/models'
+    proto_text:'Protocol: /v1/chat/completions · /v1/responses · /v1/models',
+    status_cooldown:'Cooling down',
+    cooldown_remaining:'{s}s left',
+    col_errors:'Errors',
+    error_count_label:'{n} consecutive errors',
+    settings_label_password:'Admin Password',
+    login_title:'Enter admin password',
+    login_btn:'Login',
+    login_wrong:'Wrong password',
+    health_title:'📊 Live Health',
+    health_refresh:'Refresh',
+    health_last5:'Last 5 min',
+    health_last1h:'Last 1 hour',
+    health_acct_status:'Account Status',
+    health_requests:'Requests',
+    health_success:'Success',
+    health_error_rate:'Error Rate',
+    health_latency:'Latency',
+    health_active:'✅ Active',
+    health_cooling:'⏳ Cooling',
+    health_error2:'❌ Error',
+    health_disabled2:'⛔ Disabled'
   }
 };
 let LANG = localStorage.getItem('hub_lang') || 'zh';
@@ -219,11 +270,25 @@ function applyLang() {
 
 </head>
 <body>
+<!-- 登录遮罩 -->
+<div class="login-overlay" id="login-overlay">
+<div class="login-box">
+<div style="font-size:40px;margin-bottom:12px">🦞</div>
+<h2>Codex Hub</h2>
+<p id="login-subtitle">请输入管理密码</p>
+<div class="login-error" id="login-error"></div>
+<input class="input" id="login-password" type="password" placeholder="Password" autofocus onkeydown="if(event.key==='Enter')doLogin()">
+<button class="btn btn-primary" onclick="doLogin()" id="login-btn">登录</button>
+</div>
+</div>
+
+<div id="app-main" style="display:none">
 <div class="header">
 <div style="font-size:20px">🦞</div>
 <h1>Codex Hub</h1>
 <span class="badge" id="health-badge">...</span>
 <button id="lang-btn" onclick="toggleLang()" style="background:#2d3148;border:none;color:#e2e8f0;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:13px;margin-right:8px">English</button>
+<button onclick="doLogout()" style="background:#ef4444;border:none;color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:13px;margin-right:8px" id="logout-btn">🚪</button>
 <nav class="nav">
 <button class="nav-btn active" onclick="showPage('accounts',this)" data-i18n="nav_accounts">账号</button>
 <button class="nav-btn" onclick="showPage('stats',this)" data-i18n="nav_stats">统计</button>
@@ -235,6 +300,27 @@ function applyLang() {
 <div class="container">
 
 <div class="page active" id="page-accounts">
+<!-- 实时健康面板 -->
+<div class="card" id="health-panel">
+<div class="top-bar">
+<div class="card-title" style="margin:0" data-i18n="health_title">📊 实时健康</div>
+<button class="btn btn-ghost btn-sm" onclick="loadHealthStats()" data-i18n="health_refresh">刷新</button>
+</div>
+<div id="health-stats-body" style="display:flex;gap:12px;flex-wrap:wrap">
+<div class="stat-card" style="flex:1;min-width:160px">
+<div style="font-size:12px;color:#64748b;margin-bottom:8px;font-weight:600" data-i18n="health_last5">近5分钟</div>
+<div id="hs-5min-content"><span style="color:#64748b">-</span></div>
+</div>
+<div class="stat-card" style="flex:1;min-width:160px">
+<div style="font-size:12px;color:#64748b;margin-bottom:8px;font-weight:600" data-i18n="health_last1h">近1小时</div>
+<div id="hs-1h-content"><span style="color:#64748b">-</span></div>
+</div>
+<div class="stat-card" style="flex:1;min-width:140px">
+<div style="font-size:12px;color:#64748b;margin-bottom:8px;font-weight:600" data-i18n="health_acct_status">账号状态</div>
+<div id="hs-acct-content"><span style="color:#64748b">-</span></div>
+</div>
+</div>
+</div>
 <div class="card">
 <div class="top-bar">
 <div class="card-title" style="margin:0" data-i18n="card_accounts_title">账号管理</div>
@@ -243,7 +329,7 @@ function applyLang() {
 <button class="btn btn-ghost btn-sm" onclick="exportAll()" data-i18n="btn_export_all">⬇ 全部导出</button>
 <button class="btn btn-ghost btn-sm" onclick="document.getElementById('import-file').click()" data-i18n="btn_import">⬆ 导入</button>
 <input type="file" id="import-file" accept=".json" style="display:none" onchange="importAccounts(this)">
-<button class="btn btn-success" onclick="openModal() data-i18n="btn_add">+ 添加账号</button>
+<button class="btn btn-success" onclick="openModal()" data-i18n="btn_add">+ 添加账号</button>
 </div>
 </div>
 <div class="tbl-wrap" id="accounts-table"><div class="empty" data-i18n="acct_loading">加载中...</div></div>
@@ -298,9 +384,11 @@ function applyLang() {
 <div class="card">
 <div class="card-title" data-i18n="settings_card_title">系统设置</div>
 <div class="two-col">
-<div class="form-group"><label>API Key</label><input class="input" id="setting-api-key"></div>
+<div class="form-group"><label>API Key <span id="api-key-masked" style="color:#64748b;font-size:12px"></span></label><input class="input" id="setting-api-key" placeholder="留空则不修改"></div>
 <div class="form-group"><label data-i18n="settings_label_rate">每账号每小时限速</label><input class="input" id="setting-rate" type="number"></div>
 </div>
+<hr class="divider">
+<div class="form-group"><label data-i18n="settings_label_password">管理密码</label><input class="input" id="setting-password" type="password" placeholder="留空则不修改"></div>
 <button class="btn btn-primary" onclick="saveSettings()" data-i18n="btn_save">保存</button>
 </div>
 </div>
@@ -324,17 +412,23 @@ function applyLang() {
 </div>
 </div>
 
+</div><!-- /app-main -->
+
 <script>
 const PS=50;let logPage=0;
 function showPage(n,el){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.getElementById('page-'+n).classList.add('active');if(el)el.classList.add('active');if(n==='models')loadModels();if(n==='stats')loadStats();if(n==='logs')loadLogs(0);if(n==='settings')loadSettings();}
 async function api(p,o={}){const r=await fetch(p,o);return r.json().catch(()=>({}));}
-async function init(){await Promise.all([loadHealth(),loadAccounts(),loadApiKey()]);setInterval(()=>{loadHealth();loadAccounts();},15000);}
+async function init(){await Promise.all([loadHealth(),loadAccounts(),loadApiKey(),loadHealthStats()]);setInterval(()=>{loadHealth();loadAccounts();loadHealthStats();},15000);}
 async function loadHealth(){try{const h=await api('/health');const e=document.getElementById('health-badge');e.textContent=t('health_prefix')+' '+(h.active_accounts||0)+' '+t('health_accounts');e.style.background='#10b981';}catch{document.getElementById('health-badge').textContent=t('health_offline');}}
-async function loadApiKey(){const s=await api('/api/settings');document.getElementById('api-key-display').textContent=s.api_key||'';}
+async function loadApiKey(){const s=await api('/api/settings');document.getElementById('api-key-display').textContent=s.api_key_masked||'***';}
+async function loadHealthStats(){try{const d=await api('/api/health-stats');renderHealthPeriod('hs-5min-content',d.last_5min);renderHealthPeriod('hs-1h-content',d.last_1h);renderHealthAcct('hs-acct-content',d.accounts_status);}catch(e){console.error('health-stats error',e);}}
+function renderHealthPeriod(elId,p){if(!p){document.getElementById(elId).innerHTML='<span style="color:#64748b">-</span>';return;}const rate=parseFloat(p.error_rate)||0;let rColor='#10b981';if(rate>20)rColor='#ef4444';else if(rate>10)rColor='#f59e0b';const c429=p.status_429>0?'#f59e0b':'#64748b';const latColor=p.avg_latency_ms>5000?'#ef4444':'#e2e8f0';document.getElementById(elId).innerHTML='<div style="font-size:13px;line-height:1.8">'+t('health_requests')+': <b>'+p.total+'</b><br>'+t('health_success')+': <b>'+p.ok+'</b><br>'+t('health_error_rate')+': <b style="color:'+rColor+'">'+p.error_rate+'</b><br>429: <b style="color:'+c429+'">'+p.status_429+'</b><br>'+t('health_latency')+': <b style="color:'+latColor+'">'+p.avg_latency_ms+'ms</b></div>';}
+function renderHealthAcct(elId,a){if(!a){document.getElementById(elId).innerHTML='<span style="color:#64748b">-</span>';return;}document.getElementById(elId).innerHTML='<div style="font-size:13px;line-height:1.8">'+t('health_active')+': <b>'+a.active+'</b><br>'+t('health_cooling')+': <b>'+(a.cooling>0?'<span style="color:#f59e0b">'+a.cooling+'</span>':a.cooling)+'</b><br>'+t('health_error2')+': <b>'+(a.error>0?'<span style="color:#ef4444">'+a.error+'</span>':a.error)+'</b><br>'+t('health_disabled2')+': <b>'+a.disabled+'</b></div>';}
 async function loadAccounts(){const a=await api('/api/accounts');renderAccounts(a);}
 function renderAccounts(accounts){const el=document.getElementById('accounts-table');if(!accounts.length){el.innerHTML='<div class="empty">'+t('acct_empty')+'</div>';return;}
-const rows=accounts.map(a=>{const dis=a.disabled;const cls=dis?'disabled-row':'';const st=dis?'<span class="badge-dis">'+t('status_disabled')+'</span>':a.status==='active'?'<span class="badge-ok">'+t('status_active')+'</span>':'<span class="badge-err">'+t('status_error')+'</span>';const exp=a.expires?new Date(a.expires*1000).toLocaleDateString(LANG==='zh'?'zh-CN':'en-US'):'-';const err=a.last_error?'<div style="font-size:11px;color:#ef4444;margin-top:2px">'+a.last_error.slice(0,40)+'</div>':'';const toggleBtn=dis?'<button class="btn btn-success btn-sm" onclick="toggleAccount('+a.id+',false)">'+t('btn_enable')+'</button>':'<button class="btn btn-warn btn-sm" onclick="toggleAccount('+a.id+',true)">'+t('btn_disable')+'</button>';const resetBtn=a.status!=='active'&&!dis?'<button class="btn btn-ghost btn-sm" onclick="resetAccount('+a.id+')">'+t('btn_reset')+'</button>':'';return '<tr class="'+cls+'"><td><input type="checkbox" class="cb acct-cb" value="'+a.id+'"></td><td>'+a.email+err+'</td><td>'+st+'</td><td style="color:#64748b;font-size:12px">'+exp+'</td><td>'+a.use_count+'</td><td>'+fmtT(a.input_tokens)+' / '+fmtT(a.output_tokens)+'</td><td><button class="btn btn-ghost btn-sm" onclick="showModelStats('+a.id+',\''+a.email+'\')">📊</button></td><td><div class="row-actions">'+toggleBtn+resetBtn+'<button class="btn btn-danger" onclick="deleteAccount('+a.id+')">'+t('btn_delete')+'</button></div></td></tr>';}).join('');
-el.innerHTML='<table><thead><tr><th><input type="checkbox" class="cb" onchange="toggleAll(this)"></th><th>'+t('col_email')+'</th><th>'+t('col_status')+'</th><th>'+t('col_expire')+'</th><th>'+t('col_calls')+'</th><th>'+t('col_tokens')+'</th><th>'+t('col_detail')+'</th><th>'+t('col_action')+'</th></tr></thead><tbody>'+rows+'</tbody></table>';}
+const nowSec=Math.floor(Date.now()/1000);
+const rows=accounts.map(a=>{const dis=a.disabled;const cls=dis?'disabled-row':'';const isCooling=a.cooldown_until&&a.cooldown_until>nowSec;let st;if(dis){st='<span class="badge-dis">'+t('status_disabled')+'</span>';}else if(isCooling){const rem=a.cooldown_until-nowSec;st='<span class="badge-cooldown">⏳ '+t('status_cooldown')+'</span><div style="font-size:11px;color:#fbbf24;margin-top:2px">'+t('cooldown_remaining',{s:rem})+'</div>';}else if(a.status==='active'){st='<span class="badge-ok">'+t('status_active')+'</span>';}else{st='<span class="badge-err">'+t('status_error')+'</span>';}const exp=a.expires?new Date(a.expires*1000).toLocaleDateString(LANG==='zh'?'zh-CN':'en-US'):'-';const err=a.last_error?'<div style="font-size:11px;color:#ef4444;margin-top:2px">'+a.last_error.slice(0,40)+'</div>':'';const errCnt=a.error_count>0?'<span style="color:#ef4444;font-weight:600">'+a.error_count+'</span>':'<span style="color:#64748b">0</span>';const toggleBtn=dis?'<button class="btn btn-success btn-sm" onclick="toggleAccount('+a.id+',false)">'+t('btn_enable')+'</button>':'<button class="btn btn-warn btn-sm" onclick="toggleAccount('+a.id+',true)">'+t('btn_disable')+'</button>';const needsReset=(a.status!=='active'||isCooling||a.error_count>0)&&!dis;const resetBtn=needsReset?'<button class="btn btn-ghost btn-sm" onclick="resetAccount('+a.id+')">'+t('btn_reset')+'</button>':'';return '<tr class="'+cls+'"><td><input type="checkbox" class="cb acct-cb" value="'+a.id+'"></td><td>'+a.email+err+'</td><td>'+st+'</td><td style="color:#64748b;font-size:12px">'+exp+'</td><td>'+a.use_count+'</td><td>'+fmtT(a.input_tokens)+' / '+fmtT(a.output_tokens)+'</td><td style="text-align:center">'+errCnt+'</td><td><button class="btn btn-ghost btn-sm" onclick="showModelStats('+a.id+',\''+a.email+'\')">📊</button></td><td><div class="row-actions">'+toggleBtn+resetBtn+'<button class="btn btn-danger" onclick="deleteAccount('+a.id+')">'+t('btn_delete')+'</button></div></td></tr>';}).join('');
+el.innerHTML='<table><thead><tr><th><input type="checkbox" class="cb" onchange="toggleAll(this)"></th><th>'+t('col_email')+'</th><th>'+t('col_status')+'</th><th>'+t('col_expire')+'</th><th>'+t('col_calls')+'</th><th>'+t('col_tokens')+'</th><th>'+t('col_errors')+'</th><th>'+t('col_detail')+'</th><th>'+t('col_action')+'</th></tr></thead><tbody>'+rows+'</tbody></table>';}
 
 async function toggleAccount(id,dis){await api('/api/accounts/'+id+'/'+(dis?'disable':'enable'),{method:'POST'});loadAccounts();}
 async function deleteAccount(id){if(!confirm(t('confirm_delete')))return;await api('/api/accounts/'+id,{method:'DELETE'});loadAccounts();}
@@ -359,8 +453,8 @@ const rows=logs.map(l=>{const tm=new Date(l.created_at*1000).toLocaleString(LANG
 el.innerHTML='<table><thead><tr><th>'+t('col_time')+'</th><th>'+t('col_email')+'</th><th>'+t('col_model')+'</th><th>'+t('col_status')+'</th><th>'+t('col_acct_in')+'</th><th>'+t('col_acct_out')+'</th><th>'+t('col_latency')+'</th></tr></thead><tbody>'+rows+'</tbody></table>';
 const pages=Math.ceil(total/PS),cur=Math.floor(off/PS);let pg='';if(pages>1){pg+='<button class="btn btn-ghost btn-sm" '+(cur===0?'disabled':'')+' onclick="loadLogs('+(cur-1)*PS+')">‹</button><span style="color:#64748b;font-size:13px">'+(cur+1)+'/'+pages+'</span><button class="btn btn-ghost btn-sm" '+(cur>=pages-1?'disabled':'')+' onclick="loadLogs('+(cur+1)*PS+')">›</button>';}document.getElementById('logs-pagination').innerHTML=pg;}
 
-async function loadSettings(){const s=await api('/api/settings');document.getElementById('setting-api-key').value=s.api_key||'';document.getElementById('setting-rate').value=s.rate_limit_per_hour||'50';}
-async function saveSettings(){await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:document.getElementById('setting-api-key').value.trim(),rate_limit_per_hour:document.getElementById('setting-rate').value})});await loadApiKey();alert(t('saved'));}
+async function loadSettings(){const s=await api('/api/settings');document.getElementById('api-key-masked').textContent='('+( s.api_key_masked||'***')+')';document.getElementById('setting-api-key').value='';document.getElementById('setting-rate').value=s.rate_limit_per_hour||'50';document.getElementById('setting-password').value='';}
+async function saveSettings(){const body={};const k=document.getElementById('setting-api-key').value.trim();const r=document.getElementById('setting-rate').value;const p=document.getElementById('setting-password').value;if(k)body.api_key=k;if(r)body.rate_limit_per_hour=r;if(p)body.web_password=p;await api('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(k)await loadApiKey();await loadSettings();alert(t('saved'));}
 
 function openModal(){document.getElementById('modal').classList.add('open');}
 function closeModal(){document.getElementById('modal').classList.remove('open');loadAccounts();}
@@ -381,7 +475,39 @@ async function scanModels(){document.getElementById('scan-alert').innerHTML='<di
 async function testOne(mid){const r=await api('/api/models/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:mid})});const models=await api('/api/models');renderModels(models,[r]);}
 async function testAllModels(){document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">'+t('test_running')+'</div>';const results=await api('/api/models/test-all',{method:'POST'});const models=await api('/api/models');const ok=results.filter(r=>r.status==='ok').length;document.getElementById('scan-alert').innerHTML='<div class="alert alert-success">'+t('test_done',{ok:ok,total:results.length})+'</div>';renderModels(models,results);}
 
-init();
+// ── 登录/登出 ──
+async function doLogin(){
+  const pw=document.getElementById('login-password').value;
+  if(!pw){document.getElementById('login-error').textContent='请输入密码';return;}
+  document.getElementById('login-btn').disabled=true;
+  try{
+    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+    if(r.ok){showApp();}
+    else{document.getElementById('login-error').textContent=LANG==='zh'?'密码错误':'Wrong password';}
+  }catch(e){document.getElementById('login-error').textContent=e.message;}
+  finally{document.getElementById('login-btn').disabled=false;}
+}
+async function doLogout(){
+  await fetch('/api/logout',{method:'POST'});
+  document.getElementById('app-main').style.display='none';
+  document.getElementById('login-overlay').style.display='flex';
+  document.getElementById('login-password').value='';
+  document.getElementById('login-error').textContent='';
+}
+async function checkAuth(){
+  try{
+    const r=await fetch('/api/auth-check');
+    if(r.ok){showApp();return;}
+  }catch{}
+  document.getElementById('login-overlay').style.display='flex';
+}
+function showApp(){
+  document.getElementById('login-overlay').style.display='none';
+  document.getElementById('app-main').style.display='block';
+  init();
+}
+
+checkAuth();
 </script>
 </body>
 </html>
