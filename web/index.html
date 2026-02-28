@@ -337,7 +337,7 @@ function applyLang() {
 <div class="card">
 <div class="card-title" data-i18n="card_api_title">API 接入配置</div>
 <div class="two-col">
-<div class="form-group"><label>Base URL</label><div class="code-box">http://192.168.31.201:8047/v1</div></div>
+<div class="form-group"><label>Base URL</label><div class="code-box" id="base-url-display"></div></div>
 <div class="form-group"><label>API Key</label><div style="display:flex;gap:8px"><div class="code-box" style="flex:1" id="api-key-display">...</div><button class="btn btn-ghost btn-sm" onclick="copyText(document.getElementById('api-key-display').textContent)" data-i18n="btn_copy">复制</button></div></div>
 </div>
 <div style="font-size:12px;color:#64748b" data-i18n="proto_text">协议: /v1/chat/completions · /v1/responses · /v1/models</div>
@@ -418,7 +418,7 @@ function applyLang() {
 const PS=50;let logPage=0;
 function showPage(n,el){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));document.getElementById('page-'+n).classList.add('active');if(el)el.classList.add('active');if(n==='models')loadModels();if(n==='stats')loadStats();if(n==='logs')loadLogs(0);if(n==='settings')loadSettings();}
 async function api(p,o={}){const r=await fetch(p,o);return r.json().catch(()=>({}));}
-async function init(){await Promise.all([loadHealth(),loadAccounts(),loadApiKey(),loadHealthStats()]);setInterval(()=>{loadHealth();loadAccounts();loadHealthStats();},15000);}
+async function init(){document.getElementById('base-url-display').textContent=location.origin+'/v1';await Promise.all([loadHealth(),loadAccounts(),loadApiKey(),loadHealthStats()]);setInterval(()=>{loadHealth();loadAccounts();loadHealthStats();},15000);}
 async function loadHealth(){try{const h=await api('/health');const e=document.getElementById('health-badge');e.textContent=t('health_prefix')+' '+(h.active_accounts||0)+' '+t('health_accounts');e.style.background='#10b981';}catch{document.getElementById('health-badge').textContent=t('health_offline');}}
 async function loadApiKey(){const s=await api('/api/settings');document.getElementById('api-key-display').textContent=s.api_key_masked||'***';}
 async function loadHealthStats(){try{const d=await api('/api/health-stats');renderHealthPeriod('hs-5min-content',d.last_5min);renderHealthPeriod('hs-1h-content',d.last_1h);renderHealthAcct('hs-acct-content',d.accounts_status);}catch(e){console.error('health-stats error',e);}}

@@ -49,19 +49,23 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="OpenAI Codex Hub", lifespan=lifespan)
 
-# CORS 仅允许内网
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:8047",
-        "http://localhost:8047",
-        "http://192.168.31.201:8047",
-        "http://192.168.31.205:8047",
-    ],
-    allow_methods=["*"],
-    allow_headers=["*"],
-    allow_credentials=True,
-)
+# CORS 允许内网访问
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class DynamicCORSMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        origin = request.headers.get("origin", "")
+        # 允许 localhost / 127.0.0.1 / 192.168.* 内网
+        allowed = not origin or any(p in origin for p in ["localhost", "127.0.0.1", "192.168."])
+        response = await call_next(request)
+        if allowed and origin:
+            response.headers["access-control-allow-origin"] = origin
+            response.headers["access-control-allow-credentials"] = "true"
+            response.headers["access-control-allow-methods"] = "*"
+            response.headers["access-control-allow-headers"] = "*"
+        return response
+
+app.add_middleware(DynamicCORSMiddleware)
 
 
 def verify_api_key(request: Request):
@@ -109,19 +113,20 @@ async def api_logout(response: Response):
 
 # ── OAuth Callback ──
 @app.get("/auth/callback")
-async def oauth_callback(code: str, state: str):
+async def oauth_callback(code: str, state: str, request: Request):
+    base = f"{request.url.scheme}://{request.headers.get('host', 'localhost:8047')}"
     try:
         token_data = await exchange_code(code, state)
         db.add_account(token_data["email"], token_data["access"], token_data["refresh"], token_data["expires"])
         logger.info(f"账号添加成功: {token_data['email']}")
         return HTMLResponse(f"""<!doctype html><html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#0f1117;color:#e2e8f0">
         <h2>✅ 登录成功</h2><p>账号 <b>{token_data['email']}</b> 已添加</p>
-        <p><a href="http://192.168.31.201:8047" style="color:#6366f1">返回管理后台</a></p>
+        <p><a href="{base}" style="color:#6366f1">返回管理后台</a></p>
         </body></html>""")
     except Exception as e:
         logger.error(f"OAuth callback error: {e}")
         return HTMLResponse(f"""<!doctype html><html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#0f1117;color:#e2e8f0">
-        <h2>❌ 登录失败</h2><p>{e}</p><p><a href="http://192.168.31.201:8047" style="color:#6366f1">返回</a></p>
+        <h2>❌ 登录失败</h2><p>{e}</p><p><a href="{base}" style="color:#6366f1">返回</a></p>
         </body></html>""", status_code=400)
 
 # ── 账号 API（需登录） ──

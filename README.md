@@ -15,12 +15,16 @@ OpenAI Codex Hub is a self-hosted proxy server that manages multiple ChatGPT OAu
 ### Features
 
 - 🔐 **Multi-account OAuth** — Add ChatGPT accounts via browser login flow
-- 🔄 **Smart round-robin** — Least-recently-used scheduling, automatic failover
+- 🔄 **Smart scheduling** — Error-graded cooldowns: 429→60s, 401→refresh+120s, 5xx→30s, 403→fatal. Healthy + least-recently-used first
+- 🔁 **Auto retry** — Up to 3 transparent retries with automatic account switching on failure
+- 🩹 **Self-healing** — Cooldown accounts auto-recover when timer expires, no manual intervention needed
 - ♻️ **Auto token refresh** — Silently refreshes expired access tokens using refresh tokens
-- 📊 **Traffic logs** — Per-request logging with latency, token counts, status
+- 📊 **Real-time health dashboard** — Live error rate, 429 count, latency, account status (auto-refresh every 15s)
 - 📈 **Token statistics** — Aggregated input/output token tracking per account
 - 📤 **Import / Export** — Batch JSON import/export for account portability
 - 🌐 **Dual protocol** — `/v1/chat/completions` + `/v1/responses` both supported
+- 🔒 **Web login** — Password-protected admin UI with cookie sessions (24h TTL)
+- 🛡️ **API security** — All management APIs require session auth; API key masked in responses; CORS restricted to LAN
 - 📱 **Mobile-friendly** — Responsive UI works on phone and desktop
 - 🐳 **Docker-ready** — Single `docker-compose up` deployment
 
@@ -94,7 +98,19 @@ Open **http://localhost:8047**
 docker-compose up -d
 ```
 
-Open **http://localhost:8047**
+> **⚠️ Mainland China:** The container needs proxy access to reach `chatgpt.com`. If you have a local proxy (e.g., Mihomo), pass it via environment variables:
+>
+> ```bash
+> docker run -d --name codex-hub --restart unless-stopped \
+>   -p 8047:8047 -p 1455:1455 \
+>   -v ./data:/app/data \
+>   -e HTTP_PROXY=http://<proxy-ip>:7890 \
+>   -e HTTPS_PROXY=http://<proxy-ip>:7890 \
+>   -e NO_PROXY=localhost,127.0.0.1,192.168.0.0/16,172.16.0.0/12 \
+>   codex-hub:latest
+> ```
+
+Open **http://localhost:8047** → Login with default password `admin` (change it in Settings!)
 
 ---
 
@@ -172,39 +188,47 @@ Add a custom provider in `~/.openclaw/openclaw.json`:
 ```jsonc
 {
   "models": {
-    "providers": [
-      {
-        "name": "codex-hub",
-        "type": "openai",              // standard OpenAI-compatible
+    "providers": {
+      "openai-codex-hub": {
         "baseUrl": "http://<your-server-ip>:8047/v1",
         "apiKey": "sk-codex-hub-2025",
+        "api": "openai-responses",
         "models": [
-          { "id": "gpt-5.3-codex",     "name": "GPT-5.3 Codex (Latest)" },
-          { "id": "gpt-5.2-codex",     "name": "GPT-5.2 Codex" },
-          { "id": "gpt-5.1-codex",     "name": "GPT-5.1 Codex" },
-          { "id": "gpt-5.1-codex-max", "name": "GPT-5.1 Codex Max" },
-          { "id": "gpt-5.1-codex-mini","name": "GPT-5.1 Codex Mini" },
-          { "id": "gpt-5-codex",       "name": "GPT-5 Codex" }
+          { "id": "gpt-5.3-codex",      "name": "GPT 5.3 Codex (Hub)" },
+          { "id": "gpt-5.2-codex",      "name": "GPT 5.2 Codex (Hub)" },
+          { "id": "gpt-5.1-codex",      "name": "GPT 5.1 Codex (Hub)" },
+          { "id": "gpt-5.1-codex-max",  "name": "GPT 5.1 Codex Max (Hub)" },
+          { "id": "gpt-5.1-codex-mini", "name": "GPT 5.1 Codex Mini (Hub)" },
+          { "id": "gpt-5-codex",        "name": "GPT 5 Codex (Hub)" }
         ]
       }
-    ]
+    }
   },
-  "defaults": {
-    "models": {
-      "codex-hub/gpt-5.3-codex": {}
+  "agents": {
+    "defaults": {
+      "models": {
+        "openai-codex-hub/gpt-5.3-codex": {},
+        "openai-codex-hub/gpt-5.2-codex": {},
+        "openai-codex-hub/gpt-5.1-codex": {},
+        "openai-codex-hub/gpt-5.1-codex-max": {},
+        "openai-codex-hub/gpt-5.1-codex-mini": {},
+        "openai-codex-hub/gpt-5-codex": {}
+      }
     }
   }
 }
 ```
 
-Then use the model in OpenClaw:
+> **Important:** `api` must be `"openai-responses"` (not `"openai-chat"`). Valid values: `openai-completions` | `openai-responses` | `openai-codex-responses` | `anthropic-messages` | `google-generative-ai` | `github-copilot` | `bedrock-converse-stream` | `ollama`
+
+> **Important:** `baseUrl` must include `/v1` suffix, e.g., `http://192.168.1.100:8047/v1`
+
+> **Important:** `agents.defaults.models` uses record format `{"provider/model-id": {}}`, not arrays.
+
+Then use in OpenClaw:
 
 ```bash
-# Set as default model
-openclaw model codex-hub/gpt-5.3-codex
-
-# Or use per-session
-/model codex-hub/gpt-5.3-codex
+/model openai-codex-hub/gpt-5.3-codex
 ```
 
 ### Other Clients
@@ -226,11 +250,15 @@ openclaw model codex-hub/gpt-5.3-codex
 Client (OpenClaw / curl / any app)
   │
   │  POST /v1/chat/completions  (standard OpenAI format)
+  │  POST /v1/responses         (OpenAI Responses API)
   ▼
 OpenAI Codex Hub  :8047
-  │  ┌─ Account Scheduler (round-robin, health-first)
-  │  ├─ Token Manager (auto-refresh on expiry)
-  │  └─ Protocol Converter
+  │  ┌─ 🔒 Auth Layer (Bearer API key for proxy, Cookie session for admin)
+  │  ├─ 🔄 Smart Scheduler (error_count ASC, last_used ASC)
+  │  ├─ 🩹 Error Handler (429→60s, 401→refresh+120s, 5xx→30s, 403→fatal)
+  │  ├─ 🔁 Retry Engine (max 3 attempts, transparent account switching)
+  │  ├─ ♻️ Token Manager (auto-refresh on expiry)
+  │  └─ 📊 Health Monitor (real-time stats, cooldown tracking)
   │
   │  POST https://chatgpt.com/backend-api/codex/responses
   │  Headers: chatgpt-account-id + OpenAI-Beta: responses=experimental
@@ -238,7 +266,7 @@ OpenAI Codex Hub  :8047
 ChatGPT Codex API  (SSE stream)
   │
   ▼
-Client  (standard chat.completion response)
+Client  (standard chat.completion / responses response)
 ```
 
 **Key protocol details** (reverse-engineered from OpenClaw source):
@@ -289,6 +317,16 @@ services:
 
 ---
 
+## Security
+
+- **Web UI** is password-protected. Default password: `admin` — **change it immediately** in Settings.
+- **Management APIs** (`/api/*`) require cookie session auth (login first).
+- **Proxy APIs** (`/v1/*`) require Bearer API key auth.
+- **API key** is never returned in full — Settings API shows masked value (e.g., `sk-***2025`).
+- **CORS** is restricted to `localhost`, `127.0.0.1`, and `192.168.*` (LAN only).
+- **Sessions** expire after 24 hours.
+- `/health` endpoint is public (no auth) for monitoring.
+
 ## Notes
 
 - **Mainland China**: `auth.openai.com` requires a proxy/VPN. The hub itself (once tokens are added) works without proxy if your server has direct access.
@@ -309,12 +347,16 @@ OpenAI Codex Hub 是一个自托管的代理服务器，管理多个 ChatGPT OAu
 ### 功能
 
 - 🔐 **多账号 OAuth** — 通过浏览器登录流程添加 ChatGPT 账号
-- 🔄 **智能轮询** — 最久未使用优先调度，自动故障切换
+- 🔄 **智能调度** — 错误分级冷却：429→60s、401→刷新+120s、5xx→30s、403→永久。健康+最久未用优先
+- 🔁 **自动重试** — 最多 3 次透明重试，失败自动换号
+- 🩹 **自愈机制** — 冷却账号到期自动恢复，无需人工干预
 - ♻️ **Token 自动刷新** — access token 过期后静默刷新
-- 📊 **请求日志** — 每次请求的延迟、Token 数、状态全部记录
+- 📊 **实时健康面板** — 错误率、429次数、延迟、账号状态一目了然（每15秒自动刷新）
 - 📈 **Token 统计** — 按账号统计输入/输出 Token 用量
 - 📤 **导入/导出** — JSON 批量导入导出账号（支持选择导出）
 - 🌐 **双协议** — 同时支持 `/v1/chat/completions` 和 `/v1/responses`
+- 🔒 **登录保护** — 密码保护管理界面，Cookie 会话（24小时有效）
+- 🛡️ **API 安全** — 管理接口全部需要登录鉴权；API key 掩码返回；CORS 仅限内网
 - 📱 **手机适配** — 响应式界面，手机/电脑均可正常使用
 - 🐳 **Docker 部署** — 一条命令启动
 - 🔍 **模型自动发现** — 自动扫描 OpenClaw 源码，发现新 Codex 模型

@@ -415,10 +415,20 @@ def _preprocess_responses_body(body: dict) -> dict:
                 else:
                     body["instructions"] = sys_content
             else:
-                if item.get("role") == "user" and isinstance(item.get("content"), str):
-                    item["content"] = [{"type": "input_text", "text": item["content"]}]
-                elif item.get("role") == "assistant" and isinstance(item.get("content"), str):
-                    item["content"] = [{"type": "output_text", "text": item["content"]}]
+                if item.get("role") == "user":
+                    if isinstance(item.get("content"), str):
+                        item["content"] = [{"type": "input_text", "text": item["content"]}]
+                    elif isinstance(item.get("content"), list):
+                        for part in item["content"]:
+                            if isinstance(part, dict) and part.get("type") == "text":
+                                part["type"] = "input_text"
+                elif item.get("role") == "assistant":
+                    if isinstance(item.get("content"), str):
+                        item["content"] = [{"type": "output_text", "text": item["content"]}]
+                    elif isinstance(item.get("content"), list):
+                        for part in item["content"]:
+                            if isinstance(part, dict) and part.get("type") == "text":
+                                part["type"] = "output_text"
                 non_system.append(item)
         body["input"] = non_system
     # 补齐 Codex 上游需要的默认字段
